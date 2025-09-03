@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servworx - Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(45deg, #4CAF50, #81C784, #4CAF50, #81C784);
+            background-size: 400%;
+            animation: gradient 15s ease infinite;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            width: 700px;
+            max-width: 90%;
+            text-align: center;
+            margin: 20px auto;
+        }
+        .logo {
+            margin-bottom: 20px;
+        }
+        .logo img {
+            max-width: 150px;
+            height: auto;
+        }
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        .service {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            background-color: #fafafa;
+        }
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .service-header h3 {
+            color: #333;
+            font-size: 20px;
+            margin: 0;
+        }
+        .status-info {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .status-up {
+            color: green;
+            font-weight: bold;
+        }
+        .status-down {
+            color: red;
+            font-weight: bold;
+        }
+        .status-checking {
+            color: orange;
+            font-weight: bold;
+        }
+        .status-unknown {
+            color: gray;
+            font-weight: bold;
+        }
+        .service-form {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .service-form.active {
+            display: grid;
+        }
+        .service-form label {
+            text-align: left;
+            color: #555;
+            font-weight: bold;
+        }
+        .service-form input[type="text"],
+        .service-form input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .service-form .full-width {
+            grid-column: 1 / -1;
+        }
+        .toggle-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .toggle-btn:hover {
+            background-color: #45a049;
+        }
+        .update-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin: 10px 0 0;
+        }
+        .update-btn:hover {
+            background-color: #45a049;
+        }
+        .delete-btn {
+            background-color: #ff4444 !important;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin: 10px 0 0;
+        }
+        .delete-btn:hover {
+            background-color: #cc0000 !important;
+        }
+        button[type="submit"] {
+            width: 100%;
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        button[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        .action-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .logout {
+            margin-top: 20px;
+            display: inline-block;
+            color: #4CAF50;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .logout:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #333;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: red;
+            margin-bottom: 10px;
+        }
+    </style>
+    <script>
+        function toggleConfig(id) {
+            const form = document.getElementById(id);
+            const btn = document.getElementById('toggle-' + id);
+            form.classList.toggle('active');
+            btn.textContent = form.classList.contains('active') ? 'Hide' : 'Configure';
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Servworx Service Configuration</h1>
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+        {% for service in services %}
+        {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None} %}
+        <div class="service">
+            <div class="service-header">
+                <h3>{{ service.name }}</h3>
+                <div>
+                    <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
+                </div>
+            </div>
+            <div class="status-info">
+                <p>Status: <span class="status-{{ status.status|lower }}">{{ status.status }}</span></p>
+                <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
+            </div>
+            <form method="post" action="{{ url_for('update_service', index=loop.index0) }}">
+                <div id="form-{{ loop.index0 }}" class="service-form">
+                    <label for="name_{{ loop.index0 }}">Service Name:</label>
+                    <input type="text" id="name_{{ loop.index0 }}" name="name" value="{{ service.name }}" required>
+                    <label for="website_url_{{ loop.index0 }}">URL to Monitor:</label>
+                    <input type="text" id="website_url_{{ loop.index0 }}" name="website_url" value="{{ service.website_url }}" required>
+                    <label for="container_names_{{ loop.index0 }}">Container Names (comma-separated):</label>
+                    <input type="text" id="container_names_{{ loop.index0 }}" name="container_names" value="{{ service.container_names }}" required>
+                    <label for="retries_{{ loop.index0 }}">Retries:</label>
+                    <input type="number" id="retries_{{ loop.index0 }}" name="retries" value="{{ service.retries }}" required min="1">
+                    <label for="interval_{{ loop.index0 }}">Interval (seconds):</label>
+                    <input type="number" id="interval_{{ loop.index0 }}" name="interval" value="{{ service.interval }}" required min="1">
+                    <label for="grace_period_{{ loop.index0 }}">Grace Period (seconds):</label>
+                    <input type="number" id="grace_period_{{ loop.index0 }}" name="grace_period" value="{{ service.grace_period }}" required min="1">
+                    <label for="accepted_status_codes_{{ loop.index0 }}">Accepted Status Codes (comma-separated):</label>
+                    <input type="text" id="accepted_status_codes_{{ loop.index0 }}" name="accepted_status_codes" value="{{ service.accepted_status_codes|join(', ') }}" placeholder="e.g., 200, 201">
+                    <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
+                    <button type="submit" name="action" value="delete" class="delete-btn full-width">Delete Service</button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+        <form id="add-service-form" method="post" action="{{ url_for('add_service') }}">
+            <div class="action-buttons">
+                <button type="submit">Add New Service</button>
+            </div>
+        </form>
+        <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+        <div class="footer">
+            Powered by <a href="#">Servworx</a> - Monitor Your Services with Ease
+        </div>
+    </div>
+</body>
+</html>

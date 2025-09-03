@@ -1,0 +1,14 @@
+services:
+  monitor:
+    container_name: servworx
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=production
+    ports:
+      - "7676:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config:/app/config
+    restart: unless-stopped
