@@ -207,7 +207,7 @@
             <p class="error">{{ error }}</p>
         {% endif %}
         {% for service in services %}
-        {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None} %}
+        {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None} %}
         <div class="service">
             <div class="service-header">
                 <h3>{{ service.name }}</h3>
@@ -218,6 +218,14 @@
             <div class="status-info">
                 <p>Status: <span class="status-{{ status.status|lower }}">{{ status.status }}</span></p>
                 <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
+                {% if status.down_since %}
+                    <p>Down Since: {{ status.down_since }}</p>
+                    <p>Down For: {{ status.down_for or 'N/A' }}</p>
+                {% endif %}
+                {% if status.up_since %}
+                    <p>Up Since: {{ status.up_since }}</p>
+                    <p>Up For: {{ status.up_for or 'N/A' }}</p>
+                {% endif %}
             </div>
             <form method="post" action="{{ url_for('update_service', index=loop.index0) }}">
                 <div id="form-{{ loop.index0 }}" class="service-form">

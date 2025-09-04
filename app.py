@@ -26,22 +26,12 @@ DEFAULT_CONFIG = {
             'interval': 120,
             'grace_period': 3600,
             'accepted_status_codes': [200]
-        },
-        {
-            'name': 'Tautulli',
-            'website_url': 'http://example2.com',
-            'container_names': 'tautulli',
-            'retries': 15,
-            'interval': 120,
-            'grace_period': 3600,
-            'accepted_status_codes': [200]
         }
     ]
 }
 DEFAULT_STATUS = {
     'services': [
-        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None},
-        {'name': 'Tautulli', 'status': 'Unknown', 'last_failure': None}
+        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None}
     ]
 }
 
@@ -58,6 +48,27 @@ COLOR_BLUE = '\033[94m'   # System actions (container start/stop)
 COLOR_YELLOW = '\033[93m' # Service status (Checking, Up)
 COLOR_RED = '\033[91m'    # Errors or restarts, Down status
 COLOR_RESET = '\033[0m'
+
+# Helper function to format duration in human-readable form
+def format_duration(seconds):
+    if seconds is None or seconds <= 0:
+        return "0 seconds"
+    days = seconds // (24 * 3600)
+    seconds %= (24 * 3600)
+    hours = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    seconds %= 60
+    parts = []
+    if days > 0:
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes > 0:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if seconds > 0 or not parts:
+        parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+    return ", ".join(parts)
 
 # Initialize config and status files
 if not os.path.exists(CONFIG_FILE):
@@ -129,7 +140,12 @@ def restart_containers(container_names, service_name):
     log_action("System", f"Restarting Docker containers for {service_name}", log_type='error')
     containers = container_names.split(',')
     for container in containers:
-        subprocess.run(['docker', 'restart', container.strip()])
+        container = container.strip()
+        print(f"Executing 'docker restart {container}'")
+        sys.stdout.flush()
+        subprocess.run(['docker', 'restart', container])
+        print(f"Completed 'docker restart {container}'")
+        sys.stdout.flush()
     last_restart = int(time.time())
     status = load_status()
     for s in status['services']:
@@ -179,10 +195,19 @@ def monitor_service(service, status_lock):
                 status = load_status()
                 for s in status['services']:
                     if s['name'] == name:
+                        old_status = s.get('last_stable_status', s['status'])
                         s['status'] = 'Up' if success else 'Down'
-                        if not success:
-                            s['last_failure'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            log_action("System", f"Updated last_failure for {name} to {s['last_failure']}", log_type='system')
+                        if s['status'] != old_status:
+                            if s['status'] == 'Down' and old_status == 'Up':
+                                s['down_since'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                s['up_since'] = None
+                                s['last_failure'] = s['down_since']
+                                log_action("System", f"Updated down_since for {name} to {s['down_since']}", log_type='system')
+                            elif s['status'] == 'Up' and old_status == 'Down':
+                                s['up_since'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                s['down_since'] = None
+                                log_action("System", f"Updated up_since for {name} to {s['up_since']}", log_type='system')
+                        s['last_stable_status'] = s['status']
                         log_action("System", f"Service {name} status: {s['status']}", log_type='status')
                 save_status(status)
 
@@ -193,7 +218,10 @@ def monitor_service(service, status_lock):
             elif i < retries:
                 print(f"{name}: Retry {i}/{retries} failed, retrying in {interval} seconds...")
                 sys.stdout.flush()
-                time.sleep(interval)
+                for _ in range(interval):
+                    if stop_monitoring_flag.is_set():
+                        break
+                    time.sleep(1)
 
         if not success and not stop_monitoring_flag.is_set():
             print(f"{name}: Max retries ({retries}) reached.")
@@ -204,13 +232,17 @@ def monitor_service(service, status_lock):
                     f.write(str(last_restart))
             else:
                 print(f"{name}: Restart not allowed yet. Remaining grace period: {remaining_grace} seconds.")
+                sys.stdout.flush()
                 log_action("System", f"Service {name}: Restart not allowed, remaining grace period: {remaining_grace} seconds", log_type='error')
                 sys.stdout.flush()
 
         if not stop_monitoring_flag.is_set():
             print(f"{name}: Sleeping {interval} sec...")
             sys.stdout.flush()
-            time.sleep(interval)
+            for _ in range(interval):
+                if stop_monitoring_flag.is_set():
+                    break
+                time.sleep(1)
 
 def stop_monitoring():
     global monitoring_threads
@@ -234,15 +266,22 @@ def start_monitoring():
 
     for name in config_service_names:
         if name in existing_status:
-            new_status_services.append(existing_status[name])
+            # Ensure all fields are present
+            status_entry = existing_status[name]
+            status_entry.setdefault('down_since', None)
+            status_entry.setdefault('up_since', None)
+            status_entry.setdefault('last_stable_status', status_entry.get('status', 'Unknown'))
+            new_status_services.append(status_entry)
         else:
             new_status_services.append({
                 'name': name,
                 'status': 'Unknown',
-                'last_failure': None
+                'last_failure': None,
+                'down_since': None,
+                'up_since': None,
+                'last_stable_status': 'Unknown'
             })
             log_action("System", f"Initialized status for new service: {name}", log_type='system')
-
     status['services'] = new_status_services
     save_status(status)
     log_action("System", f"Rebuilt status.json to match config.json: {config_service_names}", log_type='system')
@@ -255,7 +294,7 @@ def start_monitoring():
     log_action("System", "Monitoring threads started", log_type='system')
 
 def handle_shutdown(signum, frame):
-    log_action("System", "servworx container stopped", log_type='system')
+    log_action("System", f"Received signal {signum}, servworx container stopping", log_type='system')
     stop_monitoring()
     sys.exit(0)
 
@@ -331,6 +370,25 @@ def config():
     log_action(username, "Accessed configuration page", log_type='user')
     config = load_config()
     status = load_status()
+    
+    # Calculate durations for each service
+    current_time = int(time.time())
+    for s in status['services']:
+        s['down_for'] = None
+        s['up_for'] = None
+        if s['down_since']:
+            try:
+                down_since_time = int(datetime.datetime.strptime(s['down_since'], '%Y-%m-%d %H:%M:%S').timestamp())
+                s['down_for'] = format_duration(current_time - down_since_time)
+            except ValueError:
+                s['down_for'] = "Invalid timestamp"
+        if s['up_since']:
+            try:
+                up_since_time = int(datetime.datetime.strptime(s['up_since'], '%Y-%m-%d %H:%M:%S').timestamp())
+                s['up_for'] = format_duration(current_time - up_since_time)
+            except ValueError:
+                s['up_for'] = "Invalid timestamp"
+    
     return render_template('config.html', services=config['services'], status=status)
 
 @app.route('/update_service/<int:index>', methods=['POST'])
@@ -446,7 +504,10 @@ def add_service():
         status['services'].append({
             'name': new_service_name,
             'status': 'Unknown',
-            'last_failure': None
+            'last_failure': None,
+            'down_since': None,
+            'up_since': None,
+            'last_stable_status': 'Unknown'
         })
         save_status(status)
         log_action(username, f"Added new service: {new_service_name}", log_type='user')
