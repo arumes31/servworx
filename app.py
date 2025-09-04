@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
 }
 DEFAULT_STATUS = {
     'services': [
-        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None}
+        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'last_stable_status': 'Unknown'}
     ]
 }
 
@@ -371,11 +371,12 @@ def config():
     config = load_config()
     status = load_status()
     
-    # Calculate durations for each service
+    # Calculate durations and time to restart for each service
     current_time = int(time.time())
-    for s in status['services']:
+    for service, s in zip(config['services'], status['services']):
         s['down_for'] = None
         s['up_for'] = None
+        s['time_to_restart'] = format_duration(service['interval'] * service['retries'])
         if s['down_since']:
             try:
                 down_since_time = int(datetime.datetime.strptime(s['down_since'], '%Y-%m-%d %H:%M:%S').timestamp())

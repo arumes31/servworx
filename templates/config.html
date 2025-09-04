@@ -6,112 +6,121 @@
     <title>Servworx - Configuration</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             margin: 0;
             padding: 0;
             min-height: 100vh;
-            background: linear-gradient(45deg, #4CAF50, #81C784, #4CAF50, #81C784);
-            background-size: 400%;
-            animation: gradient 15s ease infinite;
-        }
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            background: linear-gradient(135deg, #4CAF50, #81C784);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            color: #333;
         }
         .container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            width: 700px;
-            max-width: 90%;
-            text-align: center;
-            margin: 20px auto;
-        }
-        .logo {
-            margin-bottom: 20px;
-        }
-        .logo img {
-            max-width: 150px;
-            height: auto;
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 800px;
+            margin: 2rem;
         }
         h1 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 20px;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            color: #1a3c34;
+        }
+        .services-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
         }
         .service {
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            background-color: #fafafa;
+            background-color: #f9fafb;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
         }
         .service-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 1rem;
         }
         .service-header h3 {
-            color: #333;
-            font-size: 20px;
+            font-size: 1.25rem;
             margin: 0;
+            color: #1a3c34;
         }
-        .status-info {
-            margin: 10px 0;
-            font-size: 14px;
+        .status-info p {
+            margin: 0.5rem 0;
+            font-size: 0.95rem;
         }
         .status-up {
-            color: green;
-            font-weight: bold;
+            color: #2f855a;
+            font-weight: 600;
         }
         .status-down {
-            color: red;
-            font-weight: bold;
+            color: #c53030;
+            font-weight: 600;
         }
         .status-checking {
-            color: orange;
-            font-weight: bold;
+            color: #d69e2e;
+            font-weight: 600;
         }
         .status-unknown {
-            color: gray;
-            font-weight: bold;
+            color: #718096;
+            font-weight: 600;
         }
         .service-form {
             display: none;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
         }
         .service-form.active {
             display: grid;
         }
         .service-form label {
-            text-align: left;
-            color: #555;
-            font-weight: bold;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #4a5568;
+            margin-bottom: 0.25rem;
+            display: block;
         }
         .service-form input[type="text"],
         .service-form input[type="number"] {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+        .service-form input:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
         }
         .service-form .full-width {
             grid-column: 1 / -1;
         }
+        .service-form p {
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin: 0.5rem 0;
+        }
         .toggle-btn {
             background-color: #4CAF50;
             color: white;
-            padding: 8px 15px;
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
         }
         .toggle-btn:hover {
             background-color: #45a049;
@@ -119,65 +128,67 @@
         .update-btn {
             background-color: #4CAF50;
             color: white;
-            padding: 8px 15px;
+            padding: 0.75rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 0.9rem;
             width: 100%;
-            margin: 10px 0 0;
+            margin-top: 0.5rem;
+            transition: background-color 0.2s;
         }
         .update-btn:hover {
             background-color: #45a049;
         }
         .delete-btn {
-            background-color: #ff4444 !important;
+            background-color: #ff4444;
             color: white;
-            padding: 8px 15px;
+            padding: 0.75rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 0.9rem;
             width: 100%;
-            margin: 10px 0 0;
+            margin-top: 0.5rem;
+            transition: background-color 0.2s;
         }
         .delete-btn:hover {
-            background-color: #cc0000 !important;
-        }
-        button[type="submit"] {
-            width: 100%;
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 15px;
-        }
-        button[type="submit"]:hover {
-            background-color: #45a049;
+            background-color: #cc0000;
         }
         .action-buttons {
-            margin-top: 20px;
             display: flex;
-            gap: 10px;
             justify-content: center;
+            margin-top: 1.5rem;
+        }
+        .action-buttons button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        .action-buttons button:hover {
+            background-color: #45a049;
         }
         .logout {
-            margin-top: 20px;
-            display: inline-block;
+            display: block;
+            text-align: center;
+            margin-top: 1.5rem;
             color: #4CAF50;
             text-decoration: none;
-            font-size: 16px;
+            font-size: 0.95rem;
         }
         .logout:hover {
             text-decoration: underline;
         }
         .footer {
-            margin-top: 20px;
-            font-size: 14px;
-            color: #333;
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            text-align: center;
+            color: #4a5568;
         }
         .footer a {
             color: #4CAF50;
@@ -187,8 +198,96 @@
             text-decoration: underline;
         }
         .error {
-            color: red;
-            margin-bottom: 10px;
+            color: #c53030;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        .modal-content p {
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .modal-buttons button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+        .modal-cancel {
+            background-color: #718096;
+            color: white;
+        }
+        .modal-cancel:hover {
+            background-color: #5a6b7d;
+        }
+        .modal-confirm {
+            background-color: #ff4444;
+            color: white;
+        }
+        .modal-confirm:hover {
+            background-color: #cc0000;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 1rem;
+                padding: 1.5rem;
+                max-width: 800px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+            .service-form {
+                grid-template-columns: 1fr;
+            }
+            .service-header h3 {
+                font-size: 1.1rem;
+            }
+            .toggle-btn, .update-btn, .delete-btn {
+                font-size: 0.85rem;
+                padding: 0.5rem;
+            }
+        }
+        @media (min-width: 601px) {
+            .container {
+                max-width: 1200px;
+            }
+            .services-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .service-form {
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
     <script>
@@ -198,6 +297,24 @@
             form.classList.toggle('active');
             btn.textContent = form.classList.contains('active') ? 'Hide' : 'Configure';
         }
+
+        function showDeleteModal(serviceName, formId) {
+            const modal = document.getElementById('delete-modal');
+            const modalText = document.getElementById('modal-text');
+            const modalFormId = document.getElementById('modal-form-id');
+            modalText.textContent = `Are you sure you want to delete ${serviceName}?`;
+            modalFormId.value = formId;
+            modal.style.display = 'flex';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').style.display = 'none';
+        }
+
+        function confirmDelete() {
+            const formId = document.getElementById('modal-form-id').value;
+            document.getElementById(formId).submit();
+        }
     </script>
 </head>
 <body>
@@ -206,49 +323,51 @@
         {% if error %}
             <p class="error">{{ error }}</p>
         {% endif %}
-        {% for service in services %}
-        {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None} %}
-        <div class="service">
-            <div class="service-header">
-                <h3>{{ service.name }}</h3>
-                <div>
+        <div class="services-grid">
+            {% for service in services %}
+            {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None, 'time_to_restart': format_duration(service.interval * service.retries)} %}
+            <div class="service">
+                <div class="service-header">
+                    <h3>{{ service.name }}</h3>
                     <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
                 </div>
-            </div>
-            <div class="status-info">
-                <p>Status: <span class="status-{{ status.status|lower }}">{{ status.status }}</span></p>
-                <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
-                {% if status.down_since %}
-                    <p>Down Since: {{ status.down_since }}</p>
-                    <p>Down For: {{ status.down_for or 'N/A' }}</p>
-                {% endif %}
-                {% if status.up_since %}
-                    <p>Up Since: {{ status.up_since }}</p>
-                    <p>Up For: {{ status.up_for or 'N/A' }}</p>
-                {% endif %}
-            </div>
-            <form method="post" action="{{ url_for('update_service', index=loop.index0) }}">
-                <div id="form-{{ loop.index0 }}" class="service-form">
-                    <label for="name_{{ loop.index0 }}">Service Name:</label>
-                    <input type="text" id="name_{{ loop.index0 }}" name="name" value="{{ service.name }}" required>
-                    <label for="website_url_{{ loop.index0 }}">URL to Monitor:</label>
-                    <input type="text" id="website_url_{{ loop.index0 }}" name="website_url" value="{{ service.website_url }}" required>
-                    <label for="container_names_{{ loop.index0 }}">Container Names (comma-separated):</label>
-                    <input type="text" id="container_names_{{ loop.index0 }}" name="container_names" value="{{ service.container_names }}" required>
-                    <label for="retries_{{ loop.index0 }}">Retries:</label>
-                    <input type="number" id="retries_{{ loop.index0 }}" name="retries" value="{{ service.retries }}" required min="1">
-                    <label for="interval_{{ loop.index0 }}">Interval (seconds):</label>
-                    <input type="number" id="interval_{{ loop.index0 }}" name="interval" value="{{ service.interval }}" required min="1">
-                    <label for="grace_period_{{ loop.index0 }}">Grace Period (seconds):</label>
-                    <input type="number" id="grace_period_{{ loop.index0 }}" name="grace_period" value="{{ service.grace_period }}" required min="1">
-                    <label for="accepted_status_codes_{{ loop.index0 }}">Accepted Status Codes (comma-separated):</label>
-                    <input type="text" id="accepted_status_codes_{{ loop.index0 }}" name="accepted_status_codes" value="{{ service.accepted_status_codes|join(', ') }}" placeholder="e.g., 200, 201">
-                    <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
-                    <button type="submit" name="action" value="delete" class="delete-btn full-width">Delete Service</button>
+                <div class="status-info">
+                    <p>Status: <span class="status-{{ status.status|lower }}">{{ status.status }}</span></p>
+                    <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
+                    {% if status.down_since %}
+                        <p>Down Since: {{ status.down_since }}</p>
+                        <p>Down For: {{ status.down_for or 'N/A' }}</p>
+                    {% endif %}
+                    {% if status.up_since %}
+                        <p>Up Since: {{ status.up_since }}</p>
+                        <p>Up For: {{ status.up_for or 'N/A' }}</p>
+                    {% endif %}
                 </div>
-            </form>
+                <form id="service-form-{{ loop.index0 }}" method="post" action="{{ url_for('update_service', index=loop.index0) }}">
+                    <div id="form-{{ loop.index0 }}" class="service-form">
+                        <label for="name_{{ loop.index0 }}">Service Name:</label>
+                        <input type="text" id="name_{{ loop.index0 }}" name="name" value="{{ service.name }}" required>
+                        <label for="website_url_{{ loop.index0 }}">URL to Monitor:</label>
+                        <input type="text" id="website_url_{{ loop.index0 }}" name="website_url" value="{{ service.website_url }}" required>
+                        <label for="container_names_{{ loop.index0 }}">Container Names (comma-separated):</label>
+                        <input type="text" id="container_names_{{ loop.index0 }}" name="container_names" value="{{ service.container_names }}" required>
+                        <label for="retries_{{ loop.index0 }}">Retries:</label>
+                        <input type="number" id="retries_{{ loop.index0 }}" name="retries" value="{{ service.retries }}" required min="1">
+                        <label for="interval_{{ loop.index0 }}">Interval (seconds):</label>
+                        <input type="number" id="interval_{{ loop.index0 }}" name="interval" value="{{ service.interval }}" required min="1">
+                        <label for="grace_period_{{ loop.index0 }}">Grace Period (seconds):</label>
+                        <input type="number" id="grace_period_{{ loop.index0 }}" name="grace_period" value="{{ service.grace_period }}" required min="1">
+                        <label for="accepted_status_codes_{{ loop.index0 }}">Accepted Status Codes (comma-separated):</label>
+                        <input type="text" id="accepted_status_codes_{{ loop.index0 }}" name="accepted_status_codes" value="{{ service.accepted_status_codes|join(', ') }}" placeholder="e.g., 200, 201">
+                        <p class="full-width">Time to Restart on Failure: {{ status.time_to_restart }}</p>
+                        <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
+                        <button type="button" class="delete-btn full-width" onclick="showDeleteModal('{{ service.name }}', 'service-form-{{ loop.index0 }}')">Delete Service</button>
+                        <input type="hidden" name="action" value="delete">
+                    </div>
+                </form>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
         <form id="add-service-form" method="post" action="{{ url_for('add_service') }}">
             <div class="action-buttons">
                 <button type="submit">Add New Service</button>
@@ -257,6 +376,16 @@
         <a href="{{ url_for('logout') }}" class="logout">Logout</a>
         <div class="footer">
             Powered by <a href="#">Servworx</a> - Monitor Your Services with Ease
+        </div>
+    </div>
+    <div id="delete-modal" class="modal">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <div class="modal-buttons">
+                <button class="modal-cancel" onclick="closeDeleteModal()">Cancel</button>
+                <button class="modal-confirm" onclick="confirmDelete()">Confirm</button>
+            </div>
+            <input type="hidden" id="modal-form-id">
         </div>
     </div>
 </body>
