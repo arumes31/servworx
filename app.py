@@ -25,7 +25,8 @@ DEFAULT_CONFIG = {
             'retries': 15,
             'interval': 120,
             'grace_period': 3600,
-            'accepted_status_codes': [200]
+            'accepted_status_codes': [200],
+            'paused': False
         }
     ]
 }
@@ -97,7 +98,11 @@ def log_action(username, action, log_type='user'):
 def load_config():
     try:
         with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+        # Ensure all services have 'paused' field
+        for service in config['services']:
+            service.setdefault('paused', False)
+        return config
     except Exception as e:
         log_action("System", f"Failed to load config: {str(e)}", log_type='error')
         return DEFAULT_CONFIG
@@ -163,6 +168,7 @@ def monitor_service(service, status_lock):
     interval = service['interval']
     grace_period = service['grace_period']
     accepted_status_codes = service.get('accepted_status_codes', [200])
+    paused = service.get('paused', False)
     last_restart_file = f"/app/config/last_restart_{name}.txt"
 
     # Read last restart time
@@ -173,6 +179,13 @@ def monitor_service(service, status_lock):
         last_restart = 0
 
     while not stop_monitoring_flag.is_set():
+        if paused:
+            for _ in range(interval):
+                if stop_monitoring_flag.is_set():
+                    break
+                time.sleep(1)
+            continue
+
         current_time = int(time.time())
         time_since_last_restart = current_time - last_restart
         restart_allowed = time_since_last_restart >= grace_period
@@ -286,11 +299,12 @@ def start_monitoring():
     save_status(status)
     log_action("System", f"Rebuilt status.json to match config.json: {config_service_names}", log_type='system')
 
-    # Start a thread for each service
+    # Start a thread for each service that is not paused
     for service in config['services']:
-        thread = threading.Thread(target=monitor_service, args=(service, status_lock), daemon=True)
-        monitoring_threads.append(thread)
-        thread.start()
+        if not service.get('paused', False):
+            thread = threading.Thread(target=monitor_service, args=(service, status_lock), daemon=True)
+            monitoring_threads.append(thread)
+            thread.start()
     log_action("System", "Monitoring threads started", log_type='system')
 
 def handle_shutdown(signum, frame):
@@ -456,7 +470,8 @@ def update_service(index):
                     'retries': retries,
                     'interval': interval,
                     'grace_period': grace_period,
-                    'accepted_status_codes': accepted_status_codes
+                    'accepted_status_codes': accepted_status_codes,
+                    'paused': config['services'][index].get('paused', False)
                 }
                 save_config(config)
                 # Update status if service name changed
@@ -481,6 +496,80 @@ def update_service(index):
         log_action(username, f"Failed to process service {index}: {str(e)}", log_type='error')
         return render_template('config.html', services=config['services'], status=load_status(), error=str(e))
 
+@app.route('/force_restart/<int:index>', methods=['GET'])
+def force_restart(index):
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    
+    username = session.get('username', 'unknown')
+    log_action(username, f"Requested force restart for service index {index}", log_type='user')
+    try:
+        config = load_config()
+        if 0 <= index < len(config['services']):
+            service = config['services'][index]
+            restart_containers(service['container_names'], service['name'])
+            log_action(username, f"Forced restart for service: {service['name']}", log_type='user')
+            return redirect(url_for('config'))
+        else:
+            log_action(username, f"Invalid service index {index} for force restart", log_type='error')
+            return render_template('config.html', services=config['services'], status=load_status(), error=f"Invalid service index: {index}")
+    except Exception as e:
+        log_action(username, f"Failed to force restart service {index}: {str(e)}", log_type='error')
+        return render_template('config.html', services=config['services'], status=load_status(), error=str(e))
+
+@app.route('/pause_monitoring/<int:index>', methods=['GET'])
+def pause_monitoring(index):
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    
+    username = session.get('username', 'unknown')
+    log_action(username, f"Requested pause/resume monitoring for service index {index}", log_type='user')
+    try:
+        config = load_config()
+        if 0 <= index < len(config['services']):
+            service = config['services'][index]
+            service['paused'] = not service.get('paused', False)
+            action = "paused" if service['paused'] else "resumed"
+            save_config(config)
+            log_action(username, f"Monitoring {action} for service: {service['name']}", log_type='user')
+            # Stop and restart monitoring threads
+            stop_monitoring()
+            start_monitoring()
+            return redirect(url_for('config'))
+        else:
+            log_action(username, f"Invalid service index {index} for pause/resume monitoring", log_type='error')
+            return render_template('config.html', services=config['services'], status=load_status(), error=f"Invalid service index: {index}")
+    except Exception as e:
+        log_action(username, f"Failed to pause/resume monitoring for service {index}: {str(e)}", log_type='error')
+        return render_template('config.html', services=config['services'], status=load_status(), error=str(e))
+
+@app.route('/view_logs/<int:index>', methods=['GET'])
+def view_logs(index):
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    
+    username = session.get('username', 'unknown')
+    log_action(username, f"Requested logs for service index {index}", log_type='user')
+    try:
+        config = load_config()
+        if 0 <= index < len(config['services']):
+            service = config['services'][index]
+            container_names = service['container_names'].split(',')
+            logs = []
+            for container in container_names:
+                container = container.strip()
+                if container:
+                    result = subprocess.run(['docker', 'logs', '--tail', '10', container], capture_output=True, text=True)
+                    logs.append(f"Logs for {container}:\n{result.stdout or 'No logs available'}\n")
+            log_action(username, f"Retrieved logs for service: {service['name']}", log_type='user')
+            return render_template('config.html', services=config['services'], status=load_status(), logs=''.join(logs), logs_service=service['name'])
+        else:
+            log_action(username, f"Invalid service index {index} for viewing logs", log_type='error')
+            return render_template('config.html', services=config['services'], status=load_status(), error=f"Invalid service index: {index}")
+    except Exception as e:
+        log_action(username, f"Failed to retrieve logs for service {index}: {str(e)}", log_type='error')
+        return render_template('config.html', services=config['services'], status=load_status(), error=str(e))
+
 @app.route('/add_service', methods=['POST'])
 def add_service():
     if 'logged_in' not in session:
@@ -498,7 +587,8 @@ def add_service():
             'retries': 15,
             'interval': 120,
             'grace_period': 3600,
-            'accepted_status_codes': [200]
+            'accepted_status_codes': [200],
+            'paused': False
         })
         save_config(config)
         status = load_status()

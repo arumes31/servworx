@@ -22,7 +22,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             width: 90%;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 2rem;
         }
         h1 {
@@ -33,7 +33,7 @@
         }
         .services-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 1.5rem;
         }
         .service {
@@ -46,6 +46,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
             margin-bottom: 1rem;
         }
         .service-header h3 {
@@ -71,6 +72,10 @@
         }
         .status-unknown {
             color: #718096;
+            font-weight: 600;
+        }
+        .status-paused {
+            color: #805ad5;
             font-weight: 600;
         }
         .service-form {
@@ -124,6 +129,19 @@
         }
         .toggle-btn:hover {
             background-color: #45a049;
+        }
+        .action-select {
+            padding: 0.5rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background-color: #ffffff;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .action-select:focus {
+            outline: none;
+            border-color: #3182ce;
         }
         .update-btn {
             background-color: #4CAF50;
@@ -220,13 +238,23 @@
             padding: 1.5rem;
             border-radius: 8px;
             width: 90%;
-            max-width: 400px;
+            max-width: 500px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            text-align: center;
+            text-align: left;
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .modal-content p {
             font-size: 1rem;
             margin-bottom: 1.5rem;
+        }
+        .modal-content pre {
+            background-color: #f7fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .modal-buttons {
             display: flex;
@@ -259,10 +287,7 @@
             .container {
                 margin: 1rem;
                 padding: 1.5rem;
-                max-width: 800px;
-            }
-            h1 {
-                font-size: 1.5rem;
+                max-width: 600px;
             }
             .services-grid {
                 grid-template-columns: 1fr;
@@ -270,18 +295,18 @@
             .service-form {
                 grid-template-columns: 1fr;
             }
+            h1 {
+                font-size: 1.5rem;
+            }
             .service-header h3 {
                 font-size: 1.1rem;
             }
-            .toggle-btn, .update-btn, .delete-btn {
+            .toggle-btn, .action-select, .update-btn, .delete-btn {
                 font-size: 0.85rem;
                 padding: 0.5rem;
             }
         }
         @media (min-width: 601px) {
-            .container {
-                max-width: 1200px;
-            }
             .services-grid {
                 grid-template-columns: 1fr 1fr;
             }
@@ -315,6 +340,37 @@
             const formId = document.getElementById('modal-form-id').value;
             document.getElementById(formId).submit();
         }
+
+        function showLogsModal(logs) {
+            const modal = document.getElementById('logs-modal');
+            const modalLogs = document.getElementById('modal-logs');
+            modalLogs.textContent = logs;
+            modal.style.display = 'flex';
+        }
+
+        function closeLogsModal() {
+            document.getElementById('logs-modal').style.display = 'none';
+        }
+
+        function handleAction(select, index) {
+            const action = select.value;
+            if (action === 'force_restart') {
+                window.location.href = '/force_restart/' + index;
+            } else if (action === 'pause_monitoring' || action === 'resume_monitoring') {
+                window.location.href = '/pause_monitoring/' + index;
+            } else if (action === 'view_logs') {
+                fetch('/view_logs/' + index)
+                    .then(response => response.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const logs = doc.querySelector('pre.logs')?.textContent || 'No logs available';
+                        showLogsModal(logs);
+                    })
+                    .catch(error => alert('Failed to load logs: ' + error));
+            }
+            select.value = '';
+        }
     </script>
 </head>
 <body>
@@ -323,16 +379,27 @@
         {% if error %}
             <p class="error">{{ error }}</p>
         {% endif %}
+        {% if logs %}
+            <pre class="logs" style="display: none;">{{ logs }}</pre>
+        {% endif %}
         <div class="services-grid">
             {% for service in services %}
             {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None, 'time_to_restart': format_duration(service.interval * service.retries)} %}
             <div class="service">
                 <div class="service-header">
                     <h3>{{ service.name }}</h3>
-                    <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select class="action-select" onchange="handleAction(this, {{ loop.index0 }})">
+                            <option value="" selected>Select Action</option>
+                            <option value="force_restart">Force Restart</option>
+                            <option value="{{ 'resume_monitoring' if service.paused else 'pause_monitoring' }}">{{ 'Resume Monitoring' if service.paused else 'Pause Monitoring' }}</option>
+                            <option value="view_logs">View Logs</option>
+                        </select>
+                        <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
+                    </div>
                 </div>
                 <div class="status-info">
-                    <p>Status: <span class="status-{{ status.status|lower }}">{{ status.status }}</span></p>
+                    <p>Status: <span class="status-{{ status.status|lower }}{{ ' status-paused' if service.paused else '' }}">{{ 'Paused' if service.paused else status.status }}</span></p>
                     <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
                     {% if status.down_since %}
                         <p>Down Since: {{ status.down_since }}</p>
@@ -386,6 +453,15 @@
                 <button class="modal-confirm" onclick="confirmDelete()">Confirm</button>
             </div>
             <input type="hidden" id="modal-form-id">
+        </div>
+    </div>
+    <div id="logs-modal" class="modal">
+        <div class="modal-content">
+            <p>Container Logs for {{ logs_service or 'Service' }}</p>
+            <pre id="modal-logs"></pre>
+            <div class="modal-buttons">
+                <button class="modal-cancel" onclick="closeLogsModal()">Close</button>
+            </div>
         </div>
     </div>
 </body>
