@@ -32,7 +32,7 @@ DEFAULT_CONFIG = {
 }
 DEFAULT_STATUS = {
     'services': [
-        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'last_stable_status': 'Unknown'}
+        {'name': 'Service1', 'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'last_stable_status': 'Unknown', 'down_for': None, 'up_for': None}
     ]
 }
 
@@ -283,6 +283,8 @@ def start_monitoring():
             status_entry = existing_status[name]
             status_entry.setdefault('down_since', None)
             status_entry.setdefault('up_since', None)
+            status_entry.setdefault('down_for', None)
+            status_entry.setdefault('up_for', None)
             status_entry.setdefault('last_stable_status', status_entry.get('status', 'Unknown'))
             new_status_services.append(status_entry)
         else:
@@ -292,6 +294,8 @@ def start_monitoring():
                 'last_failure': None,
                 'down_since': None,
                 'up_since': None,
+                'down_for': None,
+                'up_for': None,
                 'last_stable_status': 'Unknown'
             })
             log_action("System", f"Initialized status for new service: {name}", log_type='system')
@@ -384,12 +388,40 @@ def config():
     log_action(username, "Accessed configuration page", log_type='user')
     config = load_config()
     status = load_status()
-    
+
+    # Ensure status['services'] matches config['services']
+    config_service_names = [service['name'] for service in config['services']]
+    new_status_services = []
+    existing_status = {s['name']: s for s in status['services']}
+
+    for name in config_service_names:
+        if name in existing_status:
+            # Ensure all fields are present
+            status_entry = existing_status[name]
+            status_entry.setdefault('down_since', None)
+            status_entry.setdefault('up_since', None)
+            status_entry.setdefault('down_for', None)
+            status_entry.setdefault('up_for', None)
+            status_entry.setdefault('last_stable_status', status_entry.get('status', 'Unknown'))
+            new_status_services.append(status_entry)
+        else:
+            new_status_services.append({
+                'name': name,
+                'status': 'Unknown',
+                'last_failure': None,
+                'down_since': None,
+                'up_since': None,
+                'down_for': None,
+                'up_for': None,
+                'last_stable_status': 'Unknown'
+            })
+            log_action("System", f"Initialized status for new service: {name}", log_type='system')
+
+    status['services'] = new_status_services
+
     # Calculate durations and time to restart for each service
     current_time = int(time.time())
     for service, s in zip(config['services'], status['services']):
-        s['down_for'] = None
-        s['up_for'] = None
         s['time_to_restart'] = format_duration(service['interval'] * service['retries'])
         if s['down_since']:
             try:
@@ -403,7 +435,8 @@ def config():
                 s['up_for'] = format_duration(current_time - up_since_time)
             except ValueError:
                 s['up_for'] = "Invalid timestamp"
-    
+
+    save_status(status)
     return render_template('config.html', services=config['services'], status=status)
 
 @app.route('/update_service/<int:index>', methods=['POST'])
@@ -412,7 +445,7 @@ def update_service(index):
         return redirect(url_for('login'))
     
     username = session.get('username', 'unknown')
-    log_action(username, f"Reached update service endpoint for index {index} with raw form data: {dict(request.form)}", log_type='user')
+    log_action(username, f"Reached update_service endpoint for index {index} with form data: {dict(request.form)}", log_type='user')
     try:
         config = load_config()
         action = request.form.get('action')
@@ -439,16 +472,22 @@ def update_service(index):
             if 0 <= index < len(config['services']):
                 # Validate form data
                 required_fields = ['name', 'website_url', 'container_names', 'retries', 'interval', 'grace_period', 'accepted_status_codes']
-                for field in required_fields:
-                    if field not in request.form:
-                        raise ValueError(f"Missing required field: {field}")
+                missing_fields = [field for field in required_fields if field not in request.form]
+                if missing_fields:
+                    log_action(username, f"Missing required fields for service {index}: {missing_fields}", log_type='error')
+                    raise ValueError(f"Missing required fields: {missing_fields}")
                 
                 # Validate numeric inputs
-                retries = int(request.form['retries'])
-                interval = int(request.form['interval'])
-                grace_period = int(request.form['grace_period'])
-                if retries < 1 or interval < 1 or grace_period < 1:
-                    raise ValueError(f"Service {index}: Retries, interval, and grace period must be positive integers")
+                try:
+                    retries = int(request.form['retries'])
+                    interval = int(request.form['interval'])
+                    grace_period = int(request.form['grace_period'])
+                    if retries < 1 or interval < 1 or grace_period < 1:
+                        log_action(username, f"Invalid numeric inputs for service {index}: retries={retries}, interval={interval}, grace_period={grace_period}", log_type='error')
+                        raise ValueError("Retries, interval, and grace period must be positive integers")
+                except ValueError as e:
+                    log_action(username, f"Invalid numeric input for service {index}: {str(e)}", log_type='error')
+                    raise ValueError(f"Invalid numeric input: {str(e)}")
                 
                 # Parse comma-separated status codes, default to [200] if empty
                 status_codes = request.form['accepted_status_codes']
@@ -456,10 +495,14 @@ def update_service(index):
                     log_action(username, f"Service {index}: Empty accepted_status_codes, defaulting to [200]", log_type='user')
                     accepted_status_codes = [200]
                 else:
-                    accepted_status_codes = [int(code.strip()) for code in status_codes.split(',') if code.strip()]
-                    if not accepted_status_codes:
-                        log_action(username, f"Service {index}: No valid accepted_status_codes, defaulting to [200]", log_type='user')
-                        accepted_status_codes = [200]
+                    try:
+                        accepted_status_codes = [int(code.strip()) for code in status_codes.split(',') if code.strip()]
+                        if not accepted_status_codes:
+                            log_action(username, f"Service {index}: No valid accepted_status_codes, defaulting to [200]", log_type='user')
+                            accepted_status_codes = [200]
+                    except ValueError as e:
+                        log_action(username, f"Invalid status codes for service {index}: {str(e)}", log_type='error')
+                        raise ValueError(f"Invalid status codes: {str(e)}")
                 
                 # Update the service
                 old_service_name = config['services'][index]['name']
@@ -481,7 +524,7 @@ def update_service(index):
                         s['name'] = request.form['name']
                         log_action("System", f"Updated status name from {old_service_name} to {s['name']}", log_type='system')
                 save_status(status)
-                log_action(username, f"Configuration validated for service {index}, saving to file", log_type='user')
+                log_action(username, f"Configuration validated and saved for service {index}", log_type='user')
                 log_action(username, f"Updated service {index} successfully", log_type='user')
                 # Stop and restart monitoring threads
                 stop_monitoring()
@@ -491,6 +534,7 @@ def update_service(index):
                 log_action(username, f"Invalid service index {index} for update", log_type='error')
                 return render_template('config.html', services=config['services'], status=load_status(), error=f"Invalid service index: {index}")
         else:
+            log_action(username, f"Invalid action specified for service {index}: {action}", log_type='error')
             raise ValueError("Invalid action specified")
     except Exception as e:
         log_action(username, f"Failed to process service {index}: {str(e)}", log_type='error')
@@ -598,6 +642,8 @@ def add_service():
             'last_failure': None,
             'down_since': None,
             'up_since': None,
+            'down_for': None,
+            'up_for': None,
             'last_stable_status': 'Unknown'
         })
         save_status(status)
