@@ -3,73 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Servworx - Configuration</title>
+    <title>Servworx Service Configuration</title>
     <style>
         body {
-            font-family: system-ui, -apple-system, sans-serif;
             margin: 0;
-            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: #f3f4f6;
             min-height: 100vh;
-            background: linear-gradient(135deg, #6B46C1, #B794F4);
-            background-size: 200% 200%;
-            animation: pulse 15s ease infinite;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            color: #333;
-            position: relative;
-            overflow: hidden;
-        }
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 10%, transparent 10%),
-                        radial-gradient(circle, rgba(255, 255, 255, 0.2) 10%, transparent 10%);
-            background-size: 50px 50px;
-            background-position: 0 0, 25px 25px;
-            animation: nodes 20s linear infinite;
-            z-index: -1;
-            opacity: 0.3;
-        }
-        @keyframes pulse {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        @keyframes nodes {
-            0% { transform: translate(0, 0); }
-            100% { transform: translate(-50px, -50px); }
+            padding: 2rem;
         }
         .container {
-            background-color: #ffffff;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            width: 90%;
             max-width: 1200px;
-            margin: 2rem;
-            z-index: 1;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         h1 {
-            font-size: 2rem;
-            margin-bottom: 1.5rem;
+            color: #6b21a8;
             text-align: center;
-            color: #1a3c34;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+        .error, .logs {
+            color: #dc2626;
+            text-align: center;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
         }
         .services-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 1.5rem;
         }
         .service {
-            background-color: #f9fafb;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
+            background: #ffffff;
             padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .service:hover {
+            transform: translateY(-2px);
+        }
+        .service.paused {
+            background: #fef3c7;
+        }
+        .service.up {
+            background: #d1fae5;
+        }
+        .service.down {
+            background: #fee2e2;
         }
         .service-header {
             display: flex;
@@ -79,13 +64,14 @@
             margin-bottom: 1rem;
         }
         .service-header h3 {
-            font-size: 1.25rem;
+            color: #6b21a8;
             margin: 0;
-            color: #1a3c34;
+            font-size: 1.25rem;
         }
         .status-info p {
             margin: 0.5rem 0;
             font-size: 0.95rem;
+            color: #374151;
         }
         .status-up {
             color: #2f855a;
@@ -128,15 +114,14 @@
         .service-form input[type="number"] {
             width: 100%;
             padding: 0.75rem;
-            border: 1px solid #cbd5e0;
-            border-radius: 6px;
+            border: 1px solid #d8b4fe;
+            border-radius: 4px;
             font-size: 0.9rem;
-            transition: border-color 0.2s;
+            outline: none;
+            transition: border-color 0.3s;
         }
         .service-form input:focus {
-            outline: none;
-            border-color: #6B46C1;
-            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+            border-color: #6b21a8;
         }
         .service-form .full-width {
             grid-column: 1 / -1;
@@ -147,60 +132,60 @@
             margin: 0.5rem 0;
         }
         .toggle-btn {
-            background-color: #6B46C1;
-            color: white;
+            background: #6b21a8;
+            color: #ffffff;
             padding: 0.5rem 1rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: background-color 0.2s;
+            transition: background 0.3s;
         }
         .toggle-btn:hover {
-            background-color: #553C9A;
+            background: #a855f7;
         }
         .action-select {
             padding: 0.5rem;
-            border: 1px solid #cbd5e0;
-            border-radius: 6px;
+            border: 1px solid #d8b4fe;
+            border-radius: 4px;
             font-size: 0.9rem;
-            background-color: #ffffff;
+            background: #ffffff;
             cursor: pointer;
-            transition: border-color 0.2s;
+            transition: border-color 0.3s;
         }
         .action-select:focus {
+            border-color: #6b21a8;
             outline: none;
-            border-color: #6B46C1;
         }
         .update-btn {
-            background-color: #6B46C1;
-            color: white;
+            background: #6b21a8;
+            color: #ffffff;
             padding: 0.75rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 0.9rem;
             width: 100%;
             margin-top: 0.5rem;
-            transition: background-color 0.2s;
+            transition: background 0.3s;
         }
         .update-btn:hover {
-            background-color: #553C9A;
+            background: #a855f7;
         }
         .delete-btn {
-            background-color: #ff4444;
-            color: white;
+            background: #dc2626;
+            color: #ffffff;
             padding: 0.75rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 0.9rem;
             width: 100%;
             margin-top: 0.5rem;
-            transition: background-color 0.2s;
+            transition: background 0.3s;
         }
         .delete-btn:hover {
-            background-color: #cc0000;
+            background: #b91c1c;
         }
         .action-buttons {
             display: flex;
@@ -208,23 +193,23 @@
             margin-top: 1.5rem;
         }
         .action-buttons button {
-            background-color: #6B46C1;
-            color: white;
+            background: #6b21a8;
+            color: #ffffff;
             padding: 0.75rem 1.5rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 1rem;
-            transition: background-color 0.2s;
+            transition: background 0.3s;
         }
         .action-buttons button:hover {
-            background-color: #553C9A;
+            background: #a855f7;
         }
         .logout {
             display: block;
             text-align: center;
             margin-top: 1.5rem;
-            color: #6B46C1;
+            color: #6b21a8;
             text-decoration: none;
             font-size: 0.95rem;
         }
@@ -232,23 +217,17 @@
             text-decoration: underline;
         }
         .footer {
-            margin-top: 1.5rem;
-            font-size: 0.85rem;
             text-align: center;
-            color: #4a5568;
+            margin-top: 2rem;
+            color: #6b21a8;
+            font-size: 0.8rem;
         }
         .footer a {
-            color: #6B46C1;
+            color: #6b21a8;
             text-decoration: none;
         }
         .footer a:hover {
             text-decoration: underline;
-        }
-        .error {
-            color: #c53030;
-            font-size: 0.9rem;
-            text-align: center;
-            margin-bottom: 1rem;
         }
         .modal {
             display: none;
@@ -257,13 +236,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
             justify-content: center;
             align-items: center;
             z-index: 1000;
         }
         .modal-content {
-            background-color: #ffffff;
+            background: #ffffff;
             padding: 1.5rem;
             border-radius: 8px;
             width: 90%;
@@ -276,9 +255,10 @@
         .modal-content p {
             font-size: 1rem;
             margin-bottom: 1.5rem;
+            color: #4a5568;
         }
         .modal-content pre {
-            background-color: #f7fafc;
+            background: #f7fafc;
             padding: 1rem;
             border-radius: 6px;
             font-size: 0.85rem;
@@ -293,30 +273,29 @@
         .modal-buttons button {
             padding: 0.5rem 1rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: background-color 0.2s;
+            transition: background 0.3s;
         }
         .modal-cancel {
-            background-color: #718096;
-            color: white;
+            background: #718096;
+            color: #ffffff;
         }
         .modal-cancel:hover {
-            background-color: #5a6b7d;
+            background: #5a6b7d;
         }
         .modal-confirm {
-            background-color: #ff4444;
-            color: white;
+            background: #dc2626;
+            color: #ffffff;
         }
         .modal-confirm:hover {
-            background-color: #cc0000;
+            background: #b91c1c;
         }
         @media (max-width: 600px) {
             .container {
                 margin: 1rem;
                 padding: 1.5rem;
-                max-width: 600px;
             }
             .services-grid {
                 grid-template-columns: 1fr;
@@ -335,14 +314,6 @@
                 padding: 0.5rem;
             }
         }
-        @media (min-width: 601px) {
-            .services-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-            .service-form {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
     </style>
     <script>
         function toggleConfig(id) {
@@ -351,7 +322,6 @@
             form.classList.toggle('active');
             btn.textContent = form.classList.contains('active') ? 'Hide' : 'Configure';
         }
-
         function showDeleteModal(serviceName, formId) {
             const modal = document.getElementById('delete-modal');
             const modalText = document.getElementById('modal-text');
@@ -360,27 +330,22 @@
             modalFormId.value = formId;
             modal.style.display = 'flex';
         }
-
         function closeDeleteModal() {
             document.getElementById('delete-modal').style.display = 'none';
         }
-
         function confirmDelete() {
             const formId = document.getElementById('modal-form-id').value;
             document.getElementById(formId).submit();
         }
-
         function showLogsModal(logs) {
             const modal = document.getElementById('logs-modal');
             const modalLogs = document.getElementById('modal-logs');
             modalLogs.textContent = logs;
             modal.style.display = 'flex';
         }
-
         function closeLogsModal() {
             document.getElementById('logs-modal').style.display = 'none';
         }
-
         function handleAction(select, index) {
             const action = select.value;
             if (action === 'force_restart') {
@@ -414,7 +379,7 @@
         <div class="services-grid">
             {% for service in services %}
             {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None, 'time_to_restart': format_duration(service.interval * service.retries)} %}
-            <div class="service">
+            <div class="service {{ 'paused' if service.paused else status.status.lower() }}">
                 <div class="service-header">
                     <h3>{{ service.name }}</h3>
                     <div style="display: flex; gap: 0.5rem;">
