@@ -3,6 +3,10 @@
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
 ![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/Python-3-blue.svg?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.1.2-green.svg?logo=flask&logoColor=white)
+![Repo Size](https://img.shields.io/github/repo-size/arumes31/servworx)
+![Last Commit](https://img.shields.io/github/last-commit/arumes31/servworx)
 
 servworx is a web-based service monitoring and auto-restart tool for Docker containers. It allows you to monitor the availability of specified website URLs and automatically restart associated Docker containers if a service goes down after a configured number of retries. The application provides a user-friendly web interface for configuration, status overview, and basic management of your monitored services.
 
@@ -89,6 +93,7 @@ You can manage services directly through the web interface.
 
 ## Built With
 
+-   [Python](https://www.python.org/) - The programming language used
 -   [Flask](https://flask.palletsprojects.com/) - The web framework used
 -   [Waitress](https://docs.pylonproject.org/projects/waitress/en/latest/) - WSGI server
 -   [Requests](https://docs.python-requests.org/en/master/) - HTTP library
