@@ -54,6 +54,15 @@ These instructions will get you a copy of the project up and running on your loc
     - Username: `admin`
     - Password: `changeme` (You will be prompted to change this upon first login).
 
+### Using Pre-built Docker Image
+
+If you prefer to use the pre-built Docker image from the GitHub Container Registry (GHCR) instead of building it locally, you can use the provided example configuration.
+
+1.  **Run with the GHCR compose file:**
+    ```bash
+    docker-compose -f docker-compose.ghcr.example.yaml up -d
+    ```
+
 ## Configuration
 
 servworx stores its configuration in the `./config` directory, which is mounted as a volume into the Docker container.
