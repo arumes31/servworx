@@ -21,7 +21,8 @@ ENV PYTHONUNBUFFERED=1
 
 # Copy and install requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade "pip>=25.3" && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY app.py .

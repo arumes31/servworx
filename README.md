@@ -1,5 +1,9 @@
 # servworx
 
+![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
+![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 servworx is a web-based service monitoring and auto-restart tool for Docker containers. It allows you to monitor the availability of specified website URLs and automatically restart associated Docker containers if a service goes down after a configured number of retries. The application provides a user-friendly web interface for configuration, status overview, and basic management of your monitored services.
 
 <img width="881" height="699" alt="grafik" src="https://github.com/user-attachments/assets/29a77b6f-32a1-4bbc-a90a-c82e19a24f05" />
@@ -33,7 +37,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/servworx.git
+    git clone https://github.com/arumes31/servworx.git
     cd servworx
     ```
 
@@ -49,6 +53,15 @@ These instructions will get you a copy of the project up and running on your loc
     The default login credentials are:
     - Username: `admin`
     - Password: `changeme` (You will be prompted to change this upon first login).
+
+### Using Pre-built Docker Image
+
+If you prefer to use the pre-built Docker image from the GitHub Container Registry (GHCR) instead of building it locally, you can use the provided example configuration.
+
+1.  **Run with the GHCR compose file:**
+    ```bash
+    docker-compose -f docker-compose.ghcr.example.yaml up -d
+    ```
 
 ## Configuration
 

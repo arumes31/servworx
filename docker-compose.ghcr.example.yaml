@@ -1,0 +1,12 @@
+services:
+  monitor:
+    container_name: servworx
+    image: ghcr.io/arumes31/servworx:latest
+    environment:
+      - FLASK_ENV=production
+    ports:
+      - "7676:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config:/app/config
+    restart: unless-stopped
