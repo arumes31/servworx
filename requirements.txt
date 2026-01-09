@@ -1,5 +1,5 @@
 flask==3.1.2
-werkzeug==3.1.4
+werkzeug==3.1.5
 python-dotenv==1.2.1
 requests==2.32.5
 waitress==3.0.2
