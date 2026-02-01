@@ -10,6 +10,8 @@
 
 servworx is a web-based service monitoring and auto-restart tool for Docker containers. It allows you to monitor the availability of specified website URLs and automatically restart associated Docker containers if a service goes down after a configured number of retries. The application provides a user-friendly web interface for configuration, status overview, and basic management of your monitored services.
 
+Usage: If a VPN container restarts and the underlying container loses its port, and all integrity checks fail, can servworx additionally check the URL and restart the container if all other attempts fail
+
 <img width="881" height="699" alt="grafik" src="https://github.com/user-attachments/assets/29a77b6f-32a1-4bbc-a90a-c82e19a24f05" />
 <img width="1243" height="815" alt="grafik" src="https://github.com/user-attachments/assets/7d77d667-75c7-4e3c-81f1-02eae578d011" />
 
