@@ -272,11 +272,11 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 type ConfigViewData struct {
-	Services []config.ServiceConfig
-	Status   config.Status
-	Error    string
-	Logs     string
-	LogsSvc  string
+	Services []config.ServiceConfig `json:"services"`
+	Status   config.Status          `json:"status"`
+	Error    string                 `json:"error,omitempty"`
+	Logs     string                 `json:"logs,omitempty"`
+	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +357,7 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := r.FormValue("action")
+	action := r.FormValue("form_action")
 	monitor.LogAction(username, fmt.Sprintf("Reached update_service endpoint for index %d with action %s", idx, action), "user")
 
 	cfg, _ := config.LoadConfig()

@@ -478,7 +478,7 @@
                     <div id="form-{{ $i }}" class="service-form">
                         <div class="form-group">
                             <label>Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
-                            <input type="text" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
+                            <input type="text" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
                         </div>
                         <div class="form-group">
                             <label>URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
@@ -486,7 +486,7 @@
                         </div>
                         <div class="form-group full-width">
                             <label>Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
-                            <input type="text" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$" title="Comma separated valid container names without spaces">
+                            <input type="text" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
                         </div>
                         <div class="form-group">
                             <label>Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
@@ -513,11 +513,11 @@
                             Time to Restart on Failure: <span id="ttr-{{$i}}">{{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</span>
                         </p>
                         
-                        <button type="submit" name="action" value="update" class="btn full-width">
+                        <button type="submit" name="form_action" value="update" class="btn full-width">
                             <span>Update Service</span><div class="spinner"></div>
                         </button>
                         <button type="button" class="btn btn-danger full-width" onclick="showDeleteModal('{{ $service.Name }}', '/update_service/{{ $i }}')">Delete Service</button>
-                        <input type="hidden" name="action" id="action-{{$i}}" value="update">
+                        <input type="hidden" name="form_action" id="action-{{$i}}" value="update">
                     </div>
                 </form>
             </div>
@@ -552,7 +552,7 @@
             <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()">
             
             <form id="delete-form" method="post" action="" onsubmit="handleFormAjax(event, 'Deleting Service...')">
-                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="form_action" value="delete">
                 <div class="modal-buttons">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('delete-modal')">Cancel</button>
                     <button type="submit" class="btn btn-danger" id="delete-confirm-btn" disabled>Delete Forever</button>
@@ -638,7 +638,7 @@
             const formData = new FormData(form);
             const urlEncoded = new URLSearchParams(formData).toString();
 
-            fetch(form.action, {
+            fetch(form.getAttribute('action'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -771,58 +771,58 @@
         function updateDashboardUI(data) {
             let online = 0; let offline = 0;
             
-            data.Services.forEach((svc, i) => {
-                if (i >= data.Status.Services.length) return;
-                const status = data.Status.Services[i];
+            data.services.forEach((svc, i) => {
+                if (i >= data.status.services.length) return;
+                const status = data.status.services[i];
                 
                 // Metrics
-                if (!svc.Paused) {
-                    if (status.Status === 'Up') online++;
-                    if (status.Status === 'Down') offline++;
+                if (!svc.paused) {
+                    if (status.status === 'Up') online++;
+                    if (status.status === 'Down') offline++;
                 }
 
                 // Update Card Classes
                 const card = document.getElementById('service-card-' + i);
                 if (card) {
-                    card.className = `service ${svc.Paused ? 'paused' : status.Status.toLowerCase()} status-${status.Status.toLowerCase()}`;
-                    if (svc.Paused) card.classList.add('status-paused');
+                    card.className = `service ${svc.paused ? 'paused' : status.status.toLowerCase()} status-${status.status.toLowerCase()}`;
+                    if (svc.paused) card.classList.add('status-paused');
                 }
 
                 // Update Text Elements
                 const statusBox = document.getElementById('status-text-' + i);
                 if (statusBox) {
                     statusBox.innerHTML = `
-                        <p><strong>Status:</strong> ${svc.Paused ? 'Paused' : status.Status}</p>
-                        <p><strong>Last Failure:</strong> ${status.LastFailure || 'Never'}</p>
+                        <p><strong>Status:</strong> ${svc.paused ? 'Paused' : status.status}</p>
+                        <p><strong>Last Failure:</strong> ${status.last_failure || 'Never'}</p>
                     `;
                 }
 
                 const durationBox = document.getElementById('duration-text-' + i);
                 if (durationBox) {
                     let dHtml = '';
-                    if (status.DownSince) dHtml += `<p><strong>Down Since:</strong> ${status.DownSince.split(' ')[1]}</p>`;
-                    if (status.UpSince) dHtml += `<p><strong>Up Since:</strong> ${status.UpSince.split(' ')[1]}</p>`;
+                    if (status.down_since) dHtml += `<p><strong>Down Since:</strong> ${status.down_since.split(' ')[1]}</p>`;
+                    if (status.up_since) dHtml += `<p><strong>Up Since:</strong> ${status.up_since.split(' ')[1]}</p>`;
                     durationBox.innerHTML = dHtml;
                 }
 
                 const ttr = document.getElementById('ttr-' + i);
-                if (ttr) ttr.textContent = status.TimeToRestart || 'Unknown';
+                if (ttr) ttr.textContent = status.time_to_restart || 'Unknown';
 
                 // Render Sparkline
-                if (status.History && status.History.length > 0) {
-                    renderSparklines(i, status.History);
+                if (status.history && status.history.length > 0) {
+                    renderSparklines(i, status.history);
                 }
 
                 // Update Action Dropdown text if toggled externally
                 const pauseOpt = document.getElementById('pause-opt-' + i);
                 if (pauseOpt) {
-                    pauseOpt.value = svc.Paused ? 'resume_monitoring' : 'pause_monitoring';
-                    pauseOpt.textContent = svc.Paused ? 'Resume Monitoring' : 'Pause Monitoring';
+                    pauseOpt.value = svc.paused ? 'resume_monitoring' : 'pause_monitoring';
+                    pauseOpt.textContent = svc.paused ? 'Resume Monitoring' : 'Pause Monitoring';
                 }
             });
 
             // Update Header Metrics
-            document.getElementById('metric-total').textContent = data.Services.length;
+            document.getElementById('metric-total').textContent = data.services.length;
             document.getElementById('metric-online').textContent = online;
             document.getElementById('metric-offline').textContent = offline;
         }
