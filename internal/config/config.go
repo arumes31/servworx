@@ -44,9 +44,8 @@ type Status struct {
 }
 
 type ServiceStatus struct {
-	Name             string  `json:"name"`
+	Name             string   `json:"name"`
 	Status           string   `json:"status"`
-	History          []string `json:"history"`
 	LastFailure      *string  `json:"last_failure"`
 	DownSince        *string `json:"down_since"`
 	UpSince          *string `json:"up_since"`

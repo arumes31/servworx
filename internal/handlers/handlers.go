@@ -619,7 +619,6 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 		s.Services = append(s.Services, config.ServiceStatus{
 			Name:             newName,
 			Status:           "Unknown",
-			History:          make([]string, 0),
 			LastStableStatus: "Unknown",
 		})
 	})
@@ -672,10 +671,36 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Enrich status with in-memory history for API response
+	type APIServiceStatus struct {
+		config.ServiceStatus
+		History []string `json:"history"`
+	}
+	type APIStatusResponse struct {
+		Services []APIServiceStatus `json:"services"`
+	}
+
+	apiStatus := APIStatusResponse{}
+	for i, s := range status.Services {
+		history := []string{}
+		if i < len(cfg.Services) {
+			history = monitor.GetHistory(cfg.Services[i].Name)
+		}
+		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
+			ServiceStatus: s,
+			History:       history,
+		})
+	}
+
+	type APIViewData struct {
+		Services []config.ServiceConfig `json:"services"`
+		Status   APIStatusResponse      `json:"status"`
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	data := ConfigViewData{
+	data := APIViewData{
 		Services: cfg.Services,
-		Status:   *status,
+		Status:   apiStatus,
 	}
 	
 	jsonBytes, err := json.Marshal(data)

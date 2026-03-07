@@ -22,6 +22,10 @@ var (
 	stopChan = make(chan struct{})
 	wg       sync.WaitGroup
 
+	// In-memory health check history (not persisted to disk)
+	healthHistory   = make(map[string][]string)
+	historyMutex    sync.RWMutex
+
 	// color codes
 	colorGreen  = "\033[92m"
 	colorBlue   = "\033[94m"
@@ -29,6 +33,31 @@ var (
 	colorRed    = "\033[91m"
 	colorReset  = "\033[0m"
 )
+
+// PushHistory adds a status entry to the in-memory history for a service.
+func PushHistory(serviceName, status string) {
+	historyMutex.Lock()
+	defer historyMutex.Unlock()
+	healthHistory[serviceName] = append(healthHistory[serviceName], status)
+	if len(healthHistory[serviceName]) > 30 {
+		healthHistory[serviceName] = healthHistory[serviceName][1:]
+	}
+}
+
+// GetHistory returns a copy of the in-memory history for a service.
+func GetHistory(serviceName string) []string {
+	historyMutex.RLock()
+	defer historyMutex.RUnlock()
+	h := healthHistory[serviceName]
+	if h == nil {
+		return []string{}
+	}
+	result := make([]string, len(h))
+	for i, v := range h {
+		result[i] = v
+	}
+	return result
+}
 
 func LogAction(username, action, logType string) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
@@ -218,11 +247,6 @@ func monitorService(svc config.ServiceConfig) {
 							newStatus = "Up"
 						}
 						s.Services[j].Status = newStatus
-						
-						s.Services[j].History = append(s.Services[j].History, newStatus)
-						if len(s.Services[j].History) > 30 {
-							s.Services[j].History = s.Services[j].History[1:]
-						}
 
 						if newStatus != oldStatusStr {
 							nowStr := time.Now().Format("2006-01-02 15:04:05")
@@ -243,6 +267,13 @@ func monitorService(svc config.ServiceConfig) {
 					}
 				}
 			})
+
+			// Push to in-memory history (not persisted to disk)
+			newSt := "Down"
+			if success {
+				newSt = "Up"
+			}
+			PushHistory(currentSvc.Name, newSt)
 
 			fmt.Printf("%s: %s\n", currentSvc.Name, message)
 			if success {
@@ -307,7 +338,6 @@ func StartMonitoring() {
 				newStatus = append(newStatus, config.ServiceStatus{
 					Name:             svc.Name,
 					Status:           "Unknown",
-					History:          make([]string, 0),
 					LastStableStatus: "Unknown",
 				})
 				LogAction("System", fmt.Sprintf("Initialized status for new service: %s", svc.Name), "system")

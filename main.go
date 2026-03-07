@@ -104,7 +104,6 @@ func initDefaultFiles() error {
 					{
 						Name:             "Service1",
 						Status:           "Unknown",
-						History:          make([]string, 0),
 						LastStableStatus: "Unknown",
 					},
 				},
