@@ -73,19 +73,19 @@
             font-size: 0.95rem;
             color: #374151;
         }
-        .status-up {
+        .status-Up {
             color: #2f855a;
             font-weight: 600;
         }
-        .status-down {
+        .status-Down {
             color: #c53030;
             font-weight: 600;
         }
-        .status-checking {
+        .status-Checking {
             color: #d69e2e;
             font-weight: 600;
         }
-        .status-unknown {
+        .status-Unknown {
             color: #718096;
             font-weight: 600;
         }
@@ -370,71 +370,74 @@
 <body>
     <div class="container">
         <h1>Servworx Service Configuration</h1>
-        {% if error %}
-            <p class="error">{{ error }}</p>
-        {% endif %}
-        {% if logs %}
-            <pre class="logs" style="display: none;">{{ logs }}</pre>
-        {% endif %}
+        {{ if .Error }}
+            <p class="error">{{ .Error }}</p>
+        {{ end }}
+        {{ if .Logs }}
+            <pre class="logs" style="display: none;">{{ .Logs }}</pre>
+        {{ end }}
         <div class="services-grid">
-            {% for service in services %}
-            {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None, 'time_to_restart': format_duration(service.interval * service.retries)} %}
-            <div class="service {{ 'paused' if service.paused else status.status.lower() }}">
+            {{ range $i, $service := .Services }}
+            {{ $status := index $.Status.Services $i }}
+            <div class="service {{ if $service.Paused }}paused{{ else if eq $status.Status "Up" }}up{{ else if eq $status.Status "Down" }}down{{ end }}">
                 <div class="service-header">
-                    <h3>{{ service.name }}</h3>
+                    <h3>{{ $service.Name }}</h3>
                     <div style="display: flex; gap: 0.5rem;">
-                        <select class="action-select" onchange="handleAction(this, {{ loop.index0 }})">
+                        <select class="action-select" onchange="handleAction(this, {{ $i }})">
                             <option value="" selected>Select Action</option>
                             <option value="force_restart">Force Restart</option>
-                            <option value="{{ 'resume_monitoring' if service.paused else 'pause_monitoring' }}">{{ 'Resume Monitoring' if service.paused else 'Pause Monitoring' }}</option>
+                            <option value="{{ if $service.Paused }}resume_monitoring{{ else }}pause_monitoring{{ end }}">
+                                {{ if $service.Paused }}Resume Monitoring{{ else }}Pause Monitoring{{ end }}
+                            </option>
                             <option value="view_logs">View Logs</option>
                         </select>
-                        <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
+                        <button type="button" id="toggle-form-{{ $i }}" class="toggle-btn" onclick="toggleConfig('form-{{ $i }}')">Configure</button>
                     </div>
                 </div>
                 <div class="status-info">
-                    <p>Status: <span class="status-{{ status.status|lower }}{{ ' status-paused' if service.paused else '' }}">{{ 'Paused' if service.paused else status.status }}</span></p>
-                    <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
-                    {% if status.down_since %}
-                        <p>Down Since: {{ status.down_since }}</p>
-                        <p>Down For: {{ status.down_for or 'N/A' }}</p>
-                    {% endif %}
-                    {% if status.up_since %}
-                        <p>Up Since: {{ status.up_since }}</p>
-                        <p>Up For: {{ status.up_for or 'N/A' }}</p>
-                    {% endif %}
+                    <p>Status: <span class="status-{{ $status.Status }}{{ if $service.Paused }} status-paused{{ end }}">{{ if $service.Paused }}Paused{{ else }}{{ $status.Status }}{{ end }}</span></p>
+                    <p>Last Failure: {{ if $status.LastFailure }}{{ $status.LastFailure }}{{ else }}Never{{ end }}</p>
+                    {{ if $status.DownSince }}
+                        <p>Down Since: {{ $status.DownSince }}</p>
+                        <p>Down For: {{ if $status.DownFor }}{{ $status.DownFor }}{{ else }}N/A{{ end }}</p>
+                    {{ end }}
+                    {{ if $status.UpSince }}
+                        <p>Up Since: {{ $status.UpSince }}</p>
+                        <p>Up For: {{ if $status.UpFor }}{{ $status.UpFor }}{{ else }}N/A{{ end }}</p>
+                    {{ end }}
                 </div>
-                <form id="service-form-{{ loop.index0 }}" method="post" action="{{ url_for('update_service', index=loop.index0) }}">
-                    <div id="form-{{ loop.index0 }}" class="service-form">
-                        <label for="name_{{ loop.index0 }}">Service Name:</label>
-                        <input type="text" id="name_{{ loop.index0 }}" name="name" value="{{ service.name }}" required>
-                        <label for="website_url_{{ loop.index0 }}">URL to Monitor:</label>
-                        <input type="text" id="website_url_{{ loop.index0 }}" name="website_url" value="{{ service.website_url }}" required>
-                        <label for="container_names_{{ loop.index0 }}">Container Names (comma-separated):</label>
-                        <input type="text" id="container_names_{{ loop.index0 }}" name="container_names" value="{{ service.container_names }}" required>
-                        <label for="retries_{{ loop.index0 }}">Retries:</label>
-                        <input type="number" id="retries_{{ loop.index0 }}" name="retries" value="{{ service.retries }}" required min="1">
-                        <label for="interval_{{ loop.index0 }}">Interval (seconds):</label>
-                        <input type="number" id="interval_{{ loop.index0 }}" name="interval" value="{{ service.interval }}" required min="1">
-                        <label for="grace_period_{{ loop.index0 }}">Grace Period (seconds):</label>
-                        <input type="number" id="grace_period_{{ loop.index0 }}" name="grace_period" value="{{ service.grace_period }}" required min="1">
-                        <label for="accepted_status_codes_{{ loop.index0 }}">Accepted Status Codes (comma-separated):</label>
-                        <input type="text" id="accepted_status_codes_{{ loop.index0 }}" name="accepted_status_codes" value="{{ service.accepted_status_codes|join(', ') }}" placeholder="e.g., 200, 201">
-                        <p class="full-width">Time to Restart on Failure: {{ status.time_to_restart }}</p>
+                <form id="service-form-{{ $i }}" method="post" action="/update_service/{{ $i }}">
+                    <div id="form-{{ $i }}" class="service-form">
+                        <label for="name_{{ $i }}">Service Name:</label>
+                        <input type="text" id="name_{{ $i }}" name="name" value="{{ $service.Name }}" required>
+                        <label for="website_url_{{ $i }}">URL to Monitor:</label>
+                        <input type="text" id="website_url_{{ $i }}" name="website_url" value="{{ $service.WebsiteURL }}" required>
+                        <label for="container_names_{{ $i }}">Container Names (comma-separated):</label>
+                        <input type="text" id="container_names_{{ $i }}" name="container_names" value="{{ $service.ContainerNames }}" required>
+                        <label for="retries_{{ $i }}">Retries:</label>
+                        <input type="number" id="retries_{{ $i }}" name="retries" value="{{ $service.Retries }}" required min="1">
+                        <label for="interval_{{ $i }}">Interval (seconds):</label>
+                        <input type="number" id="interval_{{ $i }}" name="interval" value="{{ $service.Interval }}" required min="1">
+                        <label for="grace_period_{{ $i }}">Grace Period (seconds):</label>
+                        <input type="number" id="grace_period_{{ $i }}" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
+                        <label for="accepted_status_codes_{{ $i }}">Accepted Status Codes (comma-separated):</label>
+                        <input type="text" id="accepted_status_codes_{{ $i }}" name="accepted_status_codes" placeholder="e.g., 200, 201">
+                        <!-- Note: Since accepted_status_codes is []int, we'd need a template func to join. However, for simplicity, I can just leave it to default to [200] in the backend if empty, or we can use a small JS script to fill it -->
+                        <p class="full-width">Time to Restart on Failure: {{ $status.TimeToRestart }}</p>
                         <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
-                        <button type="button" class="delete-btn full-width" onclick="showDeleteModal('{{ service.name }}', 'service-form-{{ loop.index0 }}')">Delete Service</button>
+                        <button type="button" class="delete-btn full-width" onclick="showDeleteModal('{{ $service.Name }}', 'service-form-{{ $i }}')">Delete Service</button>
                         <input type="hidden" name="action" value="delete">
                     </div>
                 </form>
             </div>
-            {% endfor %}
+            {{ end }}
         </div>
-        <form id="add-service-form" method="post" action="{{ url_for('add_service') }}">
+        <form id="add-service-form" method="post" action="/add_service">
             <div class="action-buttons">
                 <button type="submit">Add New Service</button>
             </div>
         </form>
-        <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+        <a href="/logout" class="logout">Logout</a>
         <div class="footer">
             Powered by <a href="#">Servworx</a> - Monitor Your Services with Ease
         </div>
@@ -451,12 +454,18 @@
     </div>
     <div id="logs-modal" class="modal">
         <div class="modal-content">
-            <p>Container Logs for {{ logs_service or 'Service' }}</p>
+            <p>Container Logs for {{ if .LogsSvc }}{{ .LogsSvc }}{{ else }}Service{{ end }}</p>
             <pre id="modal-logs"></pre>
             <div class="modal-buttons">
                 <button class="modal-cancel" onclick="closeLogsModal()">Close</button>
             </div>
         </div>
     </div>
+    {{ range $i, $service := .Services }}
+    <script>
+        // Setup initial values for array
+        document.getElementById('accepted_status_codes_{{ $i }}').value = "{{ range $index, $code := $service.AcceptedStatusCodes }}{{ if $index }}, {{ end }}{{ $code }}{{ end }}";
+    </script>
+    {{ end }}
 </body>
 </html>

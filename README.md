@@ -3,8 +3,7 @@
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
 ![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Python](https://img.shields.io/badge/Python-3-blue.svg?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.1.2-green.svg?logo=flask&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26.1+-blue.svg?logo=go&logoColor=white)
 ![Repo Size](https://img.shields.io/github/repo-size/arumes31/servworx)
 ![Last Commit](https://img.shields.io/github/last-commit/arumes31/servworx)
 
@@ -80,8 +79,9 @@ You can manage services directly through the web interface.
 
 ```
 .
-├── app.py                  # Flask application main entry point
-├── requirements.txt        # Python dependencies
+├── main.go                 # Go application main entry point
+├── internal/               # Go packages (config, monitor, handlers)
+├── go.mod                  # Go dependencies
 ├── docker-compose.yaml     # Docker Compose configuration
 ├── Dockerfile              # Docker image build instructions
 ├── templates/              # Jinja2 HTML templates
@@ -93,10 +93,8 @@ You can manage services directly through the web interface.
 
 ## Built With
 
--   [Python](https://www.python.org/) - The programming language used
--   [Flask](https://flask.palletsprojects.com/) - The web framework used
--   [Waitress](https://docs.pylonproject.org/projects/waitress/en/latest/) - WSGI server
--   [Requests](https://docs.python-requests.org/en/master/) - HTTP library
+-   [Go](https://go.dev/) - The programming language used
+-   [Docker](https://www.docker.com/) - Containerization platform
 -   [Docker](https://www.docker.com/) - Containerization platform
 
 ## License
