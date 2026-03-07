@@ -625,7 +625,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	
 	jsonBytes, err := json.Marshal(data)
 	if err == nil {
-		w.Write(jsonBytes)
+		_, _ = w.Write(jsonBytes)
 	} else {
 		http.Error(w, "Server error rendering JSON", http.StatusInternalServerError)
 	}
