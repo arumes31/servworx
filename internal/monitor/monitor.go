@@ -64,6 +64,14 @@ func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, str
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Check if the HEAD response code is already accepted before falling back to GET
+	for _, code := range acceptedCodes {
+		if resp.StatusCode == code {
+			return true, fmt.Sprintf("Website returned status %d (accepted)", resp.StatusCode)
+		}
+	}
+
+	// Only fall back to GET if HEAD returned 405/501 and the code wasn't explicitly accepted
 	if resp.StatusCode == 405 || resp.StatusCode == 501 {
 		resp2, err2 := httpClient.Get(url)
 		if err2 != nil {
