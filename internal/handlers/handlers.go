@@ -265,7 +265,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 func renderConfigWithError(w http.ResponseWriter, errMsg string) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
-	templates.ExecuteTemplate(w, "config.html", ConfigViewData{
+	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
 		Error:    errMsg,
@@ -500,7 +500,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	status, _ := config.LoadStatus()
 	
 	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
-	templates.ExecuteTemplate(w, "config.html", ConfigViewData{
+	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
 		Logs:     logsBuilder.String(),
