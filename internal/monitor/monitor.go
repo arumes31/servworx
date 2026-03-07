@@ -2,11 +2,13 @@ package monitor
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -61,6 +63,15 @@ func checkWebsite(url string, acceptedCodes []int) (bool, string) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == 405 || resp.StatusCode == 501 {
+		resp2, err2 := httpClient.Get(url)
+		if err2 != nil {
+			return false, fmt.Sprintf("Website is unreachable: %v", err2)
+		}
+		defer func() { _ = resp2.Body.Close() }()
+		resp = resp2
+	}
+
 	for _, code := range acceptedCodes {
 		if resp.StatusCode == code {
 			return true, fmt.Sprintf("Website returned status %d (accepted)", resp.StatusCode)
@@ -78,12 +89,15 @@ func restartContainers(containerNames, serviceName string) int64 {
 			continue
 		}
 		fmt.Printf("Executing 'docker restart %s'\n", c)
-		cmd := exec.Command("docker", "restart", c)
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		cmd := exec.CommandContext(ctx, "docker", "restart", c)
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error restarting %s: %v\n", c, err)
 		} else {
 			fmt.Printf("Completed 'docker restart %s'\n", c)
 		}
+		cancel()
 	}
 
 	lastRestart := time.Now().Unix()
@@ -99,8 +113,13 @@ func restartContainers(containerNames, serviceName string) int64 {
 	return lastRestart
 }
 
+func getRestartFilename(name string) string {
+	safeName := base64.URLEncoding.EncodeToString([]byte(name))
+	return fmt.Sprintf("last_restart_%s.txt", safeName)
+}
+
 func readLastRestart(name string) int64 {
-	path := filepath.Join(config.ConfigDir, fmt.Sprintf("last_restart_%s.txt", name))
+	path := filepath.Join(config.ConfigDir, getRestartFilename(name))
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
@@ -113,7 +132,7 @@ func readLastRestart(name string) int64 {
 }
 
 func writeLastRestart(name string, val int64) {
-	path := filepath.Join(config.ConfigDir, fmt.Sprintf("last_restart_%s.txt", name))
+	path := filepath.Join(config.ConfigDir, getRestartFilename(name))
 	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", val)), 0644)
 }
 
@@ -188,6 +207,11 @@ func monitorService(svc config.ServiceConfig) {
 							newStatus = "Up"
 						}
 						s.Services[j].Status = newStatus
+						
+						s.Services[j].History = append(s.Services[j].History, newStatus)
+						if len(s.Services[j].History) > 30 {
+							s.Services[j].History = s.Services[j].History[1:]
+						}
 
 						if newStatus != oldStatusStr {
 							nowStr := time.Now().Format("2006-01-02 15:04:05")
@@ -272,6 +296,7 @@ func StartMonitoring() {
 				newStatus = append(newStatus, config.ServiceStatus{
 					Name:             svc.Name,
 					Status:           "Unknown",
+					History:          make([]string, 0),
 					LastStableStatus: "Unknown",
 				})
 				LogAction("System", fmt.Sprintf("Initialized status for new service: %s", svc.Name), "system")

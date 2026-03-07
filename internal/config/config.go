@@ -44,8 +44,9 @@ type Status struct {
 
 type ServiceStatus struct {
 	Name             string  `json:"name"`
-	Status           string  `json:"status"`
-	LastFailure      *string `json:"last_failure"`
+	Status           string   `json:"status"`
+	History          []string `json:"history"`
+	LastFailure      *string  `json:"last_failure"`
 	DownSince        *string `json:"down_since"`
 	UpSince          *string `json:"up_since"`
 	LastStableStatus string  `json:"last_stable_status"`
@@ -149,11 +150,22 @@ func UpdateStatus(updateFn func(*Status)) error {
 	path := filepath.Join(ConfigDir, StatusFile)
 	data, err := os.ReadFile(path)
 	var status Status
-	if err == nil {
-		_ = json.Unmarshal(data, &status)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		status.Services = []ServiceStatus{}
+	} else {
+		if err := json.Unmarshal(data, &status); err != nil {
+			return err
+		}
 	}
 
 	updateFn(&status)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 
 	newData, err := json.MarshalIndent(status, "", "    ")
 	if err != nil {
@@ -171,11 +183,23 @@ func UpdateConfig(updateFn func(*Config)) error {
 	path := filepath.Join(ConfigDir, ConfigFile)
 	data, err := os.ReadFile(path)
 	var cfg Config
-	if err == nil {
-		_ = json.Unmarshal(data, &cfg)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		cfg.Users = make(map[string]string)
+		cfg.Services = []ServiceConfig{}
+	} else {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return err
+		}
 	}
 
 	updateFn(&cfg)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 
 	newData, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {

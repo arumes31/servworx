@@ -43,14 +43,20 @@ func GetSession(r *http.Request) (string, bool) {
 	sessionID := cookie.Value
 
 	mutex.RLock()
-	defer mutex.RUnlock()
 	data, ok := sessions[sessionID]
+	mutex.RUnlock()
+	
 	if !ok {
 		return "", false
 	}
+	
 	if time.Now().After(data.ExpiresAt) {
+		mutex.Lock()
+		delete(sessions, sessionID)
+		mutex.Unlock()
 		return "", false
 	}
+	
 	return data.Username, true
 }
 
@@ -82,6 +88,7 @@ func SetSessionCookie(w http.ResponseWriter, sessionID string) {
 		Path:     "/",
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode, // Improved security
 	})
 }

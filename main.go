@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/arumes31/servworx/internal/config"
 	"github.com/arumes31/servworx/internal/handlers"
@@ -67,9 +70,10 @@ func initDefaultFiles() error {
 	_, err := config.LoadConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
+			adminHash, _ := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
 			// Save default
 			defaultCfg := &config.Config{
-				Users: map[string]string{"admin": "100994f7d4b470bdc7db27dfee42c0695029ed95689408e063bb7bb0b82f0ab7"}, // sha256 of 'changeme'
+				Users: map[string]string{"admin": string(adminHash)},
 				Services: []config.ServiceConfig{
 					{
 						Name:                "Service1",
@@ -83,7 +87,11 @@ func initDefaultFiles() error {
 					},
 				},
 			}
-			_ = config.SaveConfig(defaultCfg)
+			if err := config.SaveConfig(defaultCfg); err != nil {
+				return fmt.Errorf("failed to save default config: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 	}
 
@@ -95,11 +103,16 @@ func initDefaultFiles() error {
 					{
 						Name:             "Service1",
 						Status:           "Unknown",
+						History:          make([]string, 0),
 						LastStableStatus: "Unknown",
 					},
 				},
 			}
-			_ = config.SaveStatus(defaultStatus)
+			if err := config.SaveStatus(defaultStatus); err != nil {
+				return fmt.Errorf("failed to save default status: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load status: %w", err)
 		}
 	}
 

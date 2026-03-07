@@ -378,8 +378,11 @@
         {{ end }}
         <div class="services-grid">
             {{ range $i, $service := .Services }}
-            {{ $status := index $.Status.Services $i }}
-            <div class="service {{ if $service.Paused }}paused{{ else if eq $status.Status "Up" }}up{{ else if eq $status.Status "Down" }}down{{ end }}">
+            {{ $status := "" }}
+            {{ if lt $i (len $.Status.Services) }}
+                {{ $status = index $.Status.Services $i }}
+            {{ end }}
+            <div class="service {{ if $service.Paused }}paused{{ else if $status }}{{ if eq $status.Status "Up" }}up{{ else if eq $status.Status "Down" }}down{{ end }}{{ end }}">
                 <div class="service-header">
                     <h3>{{ $service.Name }}</h3>
                     <div style="display: flex; gap: 0.5rem;">
@@ -395,15 +398,22 @@
                     </div>
                 </div>
                 <div class="status-info">
-                    <p>Status: <span class="status-{{ $status.Status }}{{ if $service.Paused }} status-paused{{ end }}">{{ if $service.Paused }}Paused{{ else }}{{ $status.Status }}{{ end }}</span></p>
-                    <p>Last Failure: {{ if $status.LastFailure }}{{ $status.LastFailure }}{{ else }}Never{{ end }}</p>
-                    {{ if $status.DownSince }}
-                        <p>Down Since: {{ $status.DownSince }}</p>
-                        <p>Down For: {{ if $status.DownFor }}{{ $status.DownFor }}{{ else }}N/A{{ end }}</p>
+                    {{ if $status }}
+                        <p>Status: <span class="status-{{ $status.Status }}{{ if $service.Paused }} status-paused{{ end }}">{{ if $service.Paused }}Paused{{ else }}{{ $status.Status }}{{ end }}</span></p>
+                        <p>Last Failure: {{ if $status.LastFailure }}{{ $status.LastFailure }}{{ else }}Never{{ end }}</p>
+                    {{ else }}
+                        <p>Status: <span class="status-Unknown{{ if $service.Paused }} status-paused{{ end }}">{{ if $service.Paused }}Paused{{ else }}Unknown{{ end }}</span></p>
+                        <p>Last Failure: Never</p>
                     {{ end }}
-                    {{ if $status.UpSince }}
-                        <p>Up Since: {{ $status.UpSince }}</p>
-                        <p>Up For: {{ if $status.UpFor }}{{ $status.UpFor }}{{ else }}N/A{{ end }}</p>
+                    {{ if $status }}
+                        {{ if $status.DownSince }}
+                            <p>Down Since: {{ $status.DownSince }}</p>
+                            <p>Down For: {{ if $status.DownFor }}{{ $status.DownFor }}{{ else }}N/A{{ end }}</p>
+                        {{ end }}
+                        {{ if $status.UpSince }}
+                            <p>Up Since: {{ $status.UpSince }}</p>
+                            <p>Up For: {{ if $status.UpFor }}{{ $status.UpFor }}{{ else }}N/A{{ end }}</p>
+                        {{ end }}
                     {{ end }}
                 </div>
                 <form id="service-form-{{ $i }}" method="post" action="/update_service/{{ $i }}">
@@ -423,7 +433,7 @@
                         <label for="accepted_status_codes_{{ $i }}">Accepted Status Codes (comma-separated):</label>
                         <input type="text" id="accepted_status_codes_{{ $i }}" name="accepted_status_codes" placeholder="e.g., 200, 201">
                         <!-- Note: Since accepted_status_codes is []int, we'd need a template func to join. However, for simplicity, I can just leave it to default to [200] in the backend if empty, or we can use a small JS script to fill it -->
-                        <p class="full-width">Time to Restart on Failure: {{ $status.TimeToRestart }}</p>
+                        <p class="full-width">Time to Restart on Failure: {{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</p>
                         <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
                         <button type="button" class="delete-btn full-width" onclick="showDeleteModal('{{ $service.Name }}', 'service-form-{{ $i }}')">Delete Service</button>
                         <input type="hidden" name="action" value="delete">

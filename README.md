@@ -84,7 +84,7 @@ You can manage services directly through the web interface.
 ├── go.mod                  # Go dependencies
 ├── docker-compose.yaml     # Docker Compose configuration
 ├── Dockerfile              # Docker image build instructions
-├── templates/              # Jinja2 HTML templates
+├── templates/              # Go HTML templates
 │   ├── change_password.html
 │   ├── config.html
 │   └── login.html
@@ -94,7 +94,6 @@ You can manage services directly through the web interface.
 ## Built With
 
 -   [Go](https://go.dev/) - The programming language used
--   [Docker](https://www.docker.com/) - Containerization platform
 -   [Docker](https://www.docker.com/) - Containerization platform
 
 ## License

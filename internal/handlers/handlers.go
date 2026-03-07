@@ -1,16 +1,17 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/arumes31/servworx/internal/auth"
 	"github.com/arumes31/servworx/internal/config"
@@ -23,9 +24,9 @@ func InitTemplates(templateDir string) {
 	templates = template.Must(template.ParseGlob(filepath.Join(templateDir, "*.html")))
 }
 
-func hashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
 }
 
 // formatDuration matches Python's format_duration output closely
@@ -85,7 +86,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		if username == "admin" && r.URL.Path != "/change_password" && r.URL.Path != "/logout" {
 			cfg, err := config.LoadConfig()
 			if err == nil {
-				if hash := cfg.Users["admin"]; hash == hashPassword("changeme") {
+				if err := bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("changeme")); err == nil {
 					http.Redirect(w, r, "/change_password", http.StatusSeeOther)
 					return
 				}
@@ -143,15 +144,14 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 
 	storedHash, exists := cfg.Users[username]
 	if !exists {
-		monitor.LogAction(username, "Failed login attempt (invalid username)", "error")
-		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid username"})
+		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
 	}
 
-	hashedInput := hashPassword(password)
-	if storedHash != hashedInput {
-		monitor.LogAction(username, "Failed login attempt (invalid password)", "error")
-		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid password"})
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
+		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
 	}
 
@@ -160,9 +160,11 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 	auth.SetSessionCookie(w, sessionID)
 	monitor.LogAction(username, "Logged in", "user")
 
-	if username == "admin" && hashedInput == hashPassword("changeme") {
-		http.Redirect(w, r, "/change_password", http.StatusSeeOther)
-		return
+	if username == "admin" {
+		if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte("changeme")); err == nil {
+			http.Redirect(w, r, "/change_password", http.StatusSeeOther)
+			return
+		}
 	}
 
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
@@ -190,8 +192,21 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := config.UpdateConfig(func(cfg *config.Config) {
-		cfg.Users[username] = hashPassword(newPassword)
+	if len(newPassword) < 8 {
+		monitor.LogAction(username, "Failed password change (weak password)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Password must be at least 8 characters long"})
+		return
+	}
+
+	hashed, err := hashPassword(newPassword)
+	if err != nil {
+		monitor.LogAction(username, "Failed password change (hashing error)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "System error processing password"})
+		return
+	}
+
+	err = config.UpdateConfig(func(cfg *config.Config) {
+		cfg.Users[username] = hashed
 	})
 
 	if err != nil {
@@ -222,7 +237,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	currentTime := time.Now().Unix()
 
 	for i, svc := range cfg.Services {
-		if i < cap(status.Services) && i < len(status.Services) {
+		if i < len(status.Services) {
 			s := &status.Services[i]
 			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
 			if s.DownSince != nil {
@@ -405,27 +420,40 @@ func HandleForceRestartGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc := cfg.Services[idx]
+	var validContainerName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	
 	// run in background to not block HTTP request
 	go func(names, name string, user string) {
 		containers := strings.Split(names, ",")
+		restartSucceeded := true
 		for _, c := range containers {
 			c = strings.TrimSpace(c)
 			if c == "" {
 				continue
 			}
+			if !validContainerName.MatchString(c) {
+				monitor.LogAction(user, fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
+				restartSucceeded = false
+				continue
+			}
 			cmd := exec.Command("docker", "restart", c)
-			_ = cmd.Run()
+			if err := cmd.Run(); err != nil {
+				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
+				restartSucceeded = false
+			}
 		}
 		
-		nowStr := time.Now().Format("2006-01-02 15:04:05")
-		_ = config.UpdateStatus(func(s *config.Status) {
-			for i := range s.Services {
-				if s.Services[i].Name == name {
-					s.Services[i].LastFailure = &nowStr
+		if restartSucceeded {
+			nowStr := time.Now().Format("2006-01-02 15:04:05")
+			_ = config.UpdateStatus(func(s *config.Status) {
+				for i := range s.Services {
+					if s.Services[i].Name == name {
+						s.Services[i].LastFailure = &nowStr
+					}
 				}
-			}
-		})
-		monitor.LogAction(user, fmt.Sprintf("Forced restart for service: %s", name), "user")
+			})
+			monitor.LogAction(user, fmt.Sprintf("Forced restart for service: %s", name), "user")
+		}
 	}(svc.ContainerNames, svc.Name, username)
 
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
@@ -531,6 +559,7 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 		s.Services = append(s.Services, config.ServiceStatus{
 			Name:             newName,
 			Status:           "Unknown",
+			History:          make([]string, 0),
 			LastStableStatus: "Unknown",
 		})
 	})
