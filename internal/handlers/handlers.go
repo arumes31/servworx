@@ -153,8 +153,8 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config", requireAuth(HandleConfigGET))
 	mux.HandleFunc("POST /update_service/{index}", requireAuth(HandleUpdateServicePOST))
 	mux.HandleFunc("POST /add_service", requireAuth(HandleAddServicePOST))
-	mux.HandleFunc("GET /force_restart/{index}", requireAuth(HandleForceRestartGET))
-	mux.HandleFunc("GET /pause_monitoring/{index}", requireAuth(HandlePauseMonitoringGET))
+	mux.HandleFunc("POST /force_restart/{index}", requireAuth(HandleForceRestartPOST))
+	mux.HandleFunc("POST /pause_monitoring/{index}", requireAuth(HandlePauseMonitoringPOST))
 	mux.HandleFunc("GET /view_logs/{index}", requireAuth(HandleViewLogsGET))
 
 	// JSON / AJAX UX Endpoints
@@ -462,7 +462,7 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	renderConfigWithError(w, "Invalid action specified")
 }
 
-func HandleForceRestartGET(w http.ResponseWriter, r *http.Request) {
+func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {
@@ -517,7 +517,7 @@ func HandleForceRestartGET(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
-func HandlePauseMonitoringGET(w http.ResponseWriter, r *http.Request) {
+func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {

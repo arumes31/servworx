@@ -443,7 +443,7 @@
                 {{ $status = index $.Status.Services $i }}
             {{ end }}
             
-            <div class="service {{ if $service.Paused }}paused{{ else if $status }}{{ if eq $status.Status "Up" }}up{{ else if eq $status.Status "Down" }}down{{ end }}{{ end }}" id="service-card-{{$i}}">
+            <div class="service {{ if $service.Paused }}paused status-paused{{ else if $status }}{{ if eq $status.Status "Up" }}up status-up{{ else if eq $status.Status "Down" }}down status-down{{ end }}{{ end }}" id="service-card-{{$i}}">
                 <div class="service-header">
                     <h3>
                         <span class="pulse-dot" id="dot-{{$i}}"></span>
@@ -629,7 +629,15 @@
                 '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' :
                 '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
 
-            toast.innerHTML = `<span style="color: ${type === 'success' ? 'var(--success)' : 'var(--danger)'}">${icon}</span><div>${message}</div>`;
+            const iconEl = document.createElement('span');
+            iconEl.style.color = type === 'success' ? 'var(--success)' : 'var(--danger)';
+            iconEl.innerHTML = icon; // safe: static SVG defined above
+
+            const msgEl = document.createElement('div');
+            msgEl.textContent = message;
+
+            toast.appendChild(iconEl);
+            toast.appendChild(msgEl);
             container.appendChild(toast);
 
             setTimeout(() => {
@@ -665,13 +673,16 @@
                 if (res.headers.get('content-type')?.includes('application/json')) {
                     return res.json().then(data => ({ status: res.status, data }));
                 }
-                // Fallback if not JSON (redirect mapping from old handlers)
+                // Fallback if not JSON — reload to get fresh DOM
                 if (res.redirected || res.ok) {
-                    return { status: 200, data: { success: true, message: "Action completed" } };
+                    window.location.reload();
+                    return null;
                 }
                 throw new Error("Server Error");
             })
-            .then(({ status, data }) => {
+            .then(result => {
+                if (!result) return; // reloading
+                const { status, data } = result;
                 if (status >= 400 || !data.success) {
                     showToast(data.message || data.error || "Action failed", "error");
                 } else {
@@ -694,11 +705,16 @@
             if (!action) return;
 
             if (action === 'force_restart' || action === 'pause_monitoring' || action === 'resume_monitoring') {
-                const url = `/${action}/${index}`;
-                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                // Map resume_monitoring to the toggle endpoint
+                const endpoint = action === 'resume_monitoring' ? 'pause_monitoring' : action;
+                const url = `/${endpoint}/${index}`;
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
                     .then(res => {
                         if (res.redirected || res.ok) {
-                            showToast(`${action.replace('_', ' ')} initiated`);
+                            showToast(action.replace(/_/g, ' ') + ' initiated');
                             fetchStatus();
                         } else { showToast("Failed to initiate action", "error"); }
                     }).catch(e => showToast("Error: " + e, "error"));
@@ -744,14 +760,16 @@
             };
 
             currentEventSource.onmessage = (event) => {
-                let text = event.data;
-                // Syntax coloring mapping
-                if (text.match(/error|fail|exception|fatal/i)) text = `<span class="log-error">${text}</span>`;
-                else if (text.match(/warn/i)) text = `<span class="log-warn">${text}</span>`;
-                else if (text.match(/info/i)) text = `<span class="log-info">${text}</span>`;
-                else if (text.match(/success|ok|completed/i)) text = `<span class="log-success">${text}</span>`;
-                
-                logBox.innerHTML += text + '\n';
+                const raw = event.data;
+                const line = document.createElement('span');
+                // Classify via regex but render as text (no XSS)
+                if (/error|fail|exception|fatal/i.test(raw)) line.className = 'log-error';
+                else if (/warn/i.test(raw)) line.className = 'log-warn';
+                else if (/info/i.test(raw)) line.className = 'log-info';
+                else if (/success|ok|completed/i.test(raw)) line.className = 'log-success';
+                line.textContent = raw;
+                logBox.appendChild(line);
+                logBox.appendChild(document.createTextNode('\n'));
                 // Auto scroll down safely
                 logBox.scrollTop = logBox.scrollHeight;
             };
@@ -806,18 +824,40 @@
                 // Update Text Elements
                 const statusBox = document.getElementById('status-text-' + i);
                 if (statusBox) {
-                    statusBox.innerHTML = `
-                        <p><strong>Status:</strong> ${svc.paused ? 'Paused' : status.status}</p>
-                        <p><strong>Last Failure:</strong> ${status.last_failure || 'Never'}</p>
-                    `;
+                    statusBox.textContent = '';
+                    const p1 = document.createElement('p');
+                    const b1 = document.createElement('strong');
+                    b1.textContent = 'Status: ';
+                    p1.appendChild(b1);
+                    p1.appendChild(document.createTextNode(svc.paused ? 'Paused' : status.status));
+                    const p2 = document.createElement('p');
+                    const b2 = document.createElement('strong');
+                    b2.textContent = 'Last Failure: ';
+                    p2.appendChild(b2);
+                    p2.appendChild(document.createTextNode(status.last_failure || 'Never'));
+                    statusBox.appendChild(p1);
+                    statusBox.appendChild(p2);
                 }
 
                 const durationBox = document.getElementById('duration-text-' + i);
                 if (durationBox) {
-                    let dHtml = '';
-                    if (status.down_since) dHtml += `<p><strong>Down Since:</strong> ${status.down_since.split(' ')[1]}</p>`;
-                    if (status.up_since) dHtml += `<p><strong>Up Since:</strong> ${status.up_since.split(' ')[1]}</p>`;
-                    durationBox.innerHTML = dHtml;
+                    durationBox.textContent = '';
+                    if (status.down_since) {
+                        const p = document.createElement('p');
+                        const b = document.createElement('strong');
+                        b.textContent = 'Down Since: ';
+                        p.appendChild(b);
+                        p.appendChild(document.createTextNode(status.down_since.split(' ')[1]));
+                        durationBox.appendChild(p);
+                    }
+                    if (status.up_since) {
+                        const p = document.createElement('p');
+                        const b = document.createElement('strong');
+                        b.textContent = 'Up Since: ';
+                        p.appendChild(b);
+                        p.appendChild(document.createTextNode(status.up_since.split(' ')[1]));
+                        durationBox.appendChild(p);
+                    }
                 }
 
                 const ttr = document.getElementById('ttr-' + i);
