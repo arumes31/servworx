@@ -138,6 +138,11 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
@@ -187,6 +192,11 @@ func HandleChangePasswordGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	username, _ := auth.GetSession(r)
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
@@ -341,6 +351,8 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if action == "update" {
+		r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+		_ = r.ParseForm()
 		retries, err1 := strconv.Atoi(r.FormValue("retries"))
 		interval, err2 := strconv.Atoi(r.FormValue("interval"))
 		gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
@@ -377,6 +389,7 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 
 		oldName := cfg.Services[idx].Name
 		newName := r.FormValue("name")
+		insecureSkip := r.FormValue("insecure_skip_verify") == "on"
 
 		_ = config.UpdateConfig(func(c *config.Config) {
 			c.Services[idx].Name = newName
@@ -386,6 +399,7 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 			c.Services[idx].Interval = interval
 			c.Services[idx].GracePeriod = gracePeriod
 			c.Services[idx].AcceptedStatusCodes = codes
+			c.Services[idx].InsecureSkipVerify = insecureSkip
 			// paused remains the same
 		})
 
@@ -441,6 +455,7 @@ func HandleForceRestartGET(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 				continue
 			}
+			// #nosec G204
 			cmd := exec.Command("docker", "restart", c)
 			if err := cmd.Run(); err != nil {
 				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
@@ -517,6 +532,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
 		if c != "" {
+			// #nosec G204
 			cmd := exec.Command("docker", "logs", "--tail", "10", c)
 			out, _ := cmd.CombinedOutput()
 			outStr := string(out)
@@ -557,6 +573,7 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 			GracePeriod:         3600,
 			AcceptedStatusCodes: []int{200},
 			Paused:              false,
+			InsecureSkipVerify:  false,
 		})
 	})
 
@@ -672,6 +689,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #nosec G204
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

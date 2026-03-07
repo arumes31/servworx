@@ -504,6 +504,10 @@
                             <label>Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
                             <input type="text" id="codes_{{ $i }}" name="accepted_status_codes" placeholder="200, 201">
                         </div>
+                        <div class="form-group full-width" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="insecure_{{ $i }}" name="insecure_skip_verify" style="width: auto; margin:0;" {{ if $service.InsecureSkipVerify }}checked{{ end }}>
+                            <label for="insecure_{{ $i }}" style="margin:0;">Allow Insecure TLS (Self-Signed Certificates) <span class="tooltip-icon" data-tooltip="Skips verifying the TLS certificate chain when pinging the website URL. Useful for internal or self-signed domains.">?</span></label>
+                        </div>
                         
                         <p class="full-width" style="color: var(--text-muted); font-size: 0.85rem">
                             Time to Restart on Failure: <span id="ttr-{{$i}}">{{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</span>

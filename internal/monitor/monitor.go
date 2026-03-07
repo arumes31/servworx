@@ -19,12 +19,6 @@ import (
 )
 
 var (
-	httpClient = &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // same as verify=False in python
-		},
-	}
 	stopChan = make(chan struct{})
 	wg       sync.WaitGroup
 
@@ -56,7 +50,14 @@ func LogAction(username, action, logType string) {
 	fmt.Printf("%s[%s] %s: %s%s\n", color, timestamp, username, action, colorReset)
 }
 
-func checkWebsite(url string, acceptedCodes []int) (bool, string) {
+func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, string) {
+	// #nosec G402
+	httpClient := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkip},
+		},
+	}
 	resp, err := httpClient.Head(url)
 	if err != nil {
 		return false, fmt.Sprintf("Website is unreachable: %v", err)
@@ -91,6 +92,7 @@ func restartContainers(containerNames, serviceName string) int64 {
 		fmt.Printf("Executing 'docker restart %s'\n", c)
 		
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// #nosec G204
 		cmd := exec.CommandContext(ctx, "docker", "restart", c)
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error restarting %s: %v\n", c, err)
@@ -133,7 +135,7 @@ func readLastRestart(name string) int64 {
 
 func writeLastRestart(name string, val int64) {
 	path := filepath.Join(config.ConfigDir, getRestartFilename(name))
-	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", val)), 0644)
+	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", val)), 0600)
 }
 
 func monitorService(svc config.ServiceConfig) {
@@ -192,7 +194,7 @@ func monitorService(svc config.ServiceConfig) {
 		success := false
 		var message string
 		for i := 1; i <= currentSvc.Retries; i++ {
-			success, message = checkWebsite(currentSvc.WebsiteURL, currentSvc.AcceptedStatusCodes)
+			success, message = checkWebsite(currentSvc.WebsiteURL, currentSvc.AcceptedStatusCodes, currentSvc.InsecureSkipVerify)
 
 			_ = config.UpdateStatus(func(s *config.Status) {
 				for j := range s.Services {

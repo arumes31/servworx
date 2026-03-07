@@ -32,8 +32,9 @@ func main() {
 	handlers.RegisterRoutes(mux)
 
 	server := &http.Server{
-		Addr:    "0.0.0.0:5000",
-		Handler: mux,
+		Addr:              "0.0.0.0:5000",
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second,
 	}
 
 	// 4. Start Background Monitor
@@ -65,7 +66,7 @@ func main() {
 }
 
 func initDefaultFiles() error {
-	_ = os.MkdirAll(config.ConfigDir, 0755)
+	_ = os.MkdirAll(config.ConfigDir, 0750)
 
 	_, err := config.LoadConfig()
 	if err != nil {

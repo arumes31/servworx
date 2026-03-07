@@ -36,6 +36,7 @@ type ServiceConfig struct {
 	GracePeriod         int    `json:"grace_period"`
 	AcceptedStatusCodes []int  `json:"accepted_status_codes"`
 	Paused              bool   `json:"paused"`
+	InsecureSkipVerify  bool   `json:"insecure_skip_verify"`
 }
 
 type Status struct {
@@ -61,6 +62,7 @@ func LoadConfig() (*Config, error) {
 	defer configMutex.RUnlock()
 
 	path := filepath.Join(ConfigDir, ConfigFile)
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -90,7 +92,7 @@ func SaveConfig(cfg *Config) error {
 	defer configMutex.Unlock()
 
 	path := filepath.Join(ConfigDir, ConfigFile)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
 
@@ -99,7 +101,7 @@ func SaveConfig(cfg *Config) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // LoadStatus reads the status file.
@@ -108,6 +110,7 @@ func LoadStatus() (*Status, error) {
 	defer statusMutex.RUnlock()
 
 	path := filepath.Join(ConfigDir, StatusFile)
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -130,7 +133,7 @@ func SaveStatus(status *Status) error {
 	defer statusMutex.Unlock()
 
 	path := filepath.Join(ConfigDir, StatusFile)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
 
@@ -139,7 +142,7 @@ func SaveStatus(status *Status) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // UpdateStatus atomically updates the status using a callback function.
@@ -148,6 +151,7 @@ func UpdateStatus(updateFn func(*Status)) error {
 	defer statusMutex.Unlock()
 
 	path := filepath.Join(ConfigDir, StatusFile)
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	var status Status
 	if err != nil {
@@ -172,7 +176,7 @@ func UpdateStatus(updateFn func(*Status)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0644)
+	return os.WriteFile(path, newData, 0600)
 }
 
 // UpdateConfig atomically updates the configuration using a callback function.
@@ -181,6 +185,7 @@ func UpdateConfig(updateFn func(*Config)) error {
 	defer configMutex.Unlock()
 
 	path := filepath.Join(ConfigDir, ConfigFile)
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	var cfg Config
 	if err != nil {
@@ -206,5 +211,5 @@ func UpdateConfig(updateFn func(*Config)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0644)
+	return os.WriteFile(path, newData, 0600)
 }
