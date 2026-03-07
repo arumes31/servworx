@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -28,6 +30,37 @@ func InitTemplates(templateDir string) {
 func hashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(bytes), err
+}
+
+// checkPassword verifies a password against a stored hash.
+// It supports both bcrypt (Go) and SHA256 hex (legacy PHP) formats.
+// Returns true if the password matches.
+func checkPassword(password, storedHash string) bool {
+	// Bcrypt hashes always start with "$2a$", "$2b$", or "$2y$"
+	if strings.HasPrefix(storedHash, "$2") {
+		return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)) == nil
+	}
+
+	// Legacy SHA256 hex hash (64 character hex string)
+	if len(storedHash) == 64 {
+		sum := sha256.Sum256([]byte(password))
+		return hex.EncodeToString(sum[:]) == storedHash
+	}
+
+	return false
+}
+
+// migratePasswordToBcrypt re-hashes a legacy password with bcrypt and saves it.
+func migratePasswordToBcrypt(username, password string) {
+	newHash, err := hashPassword(password)
+	if err != nil {
+		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
+		return
+	}
+	_ = config.UpdateConfig(func(cfg *config.Config) {
+		cfg.Users[username] = newHash
+	})
+	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
 }
 
 // formatDuration matches Python's format_duration output closely
@@ -87,7 +120,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		if username == "admin" && r.URL.Path != "/change_password" && r.URL.Path != "/logout" {
 			cfg, err := config.LoadConfig()
 			if err == nil {
-				if err := bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("changeme")); err == nil {
+				if checkPassword("changeme", cfg.Users["admin"]) {
 					http.Redirect(w, r, "/change_password", http.StatusSeeOther)
 					return
 				}
@@ -159,10 +192,15 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
+	if !checkPassword(password, storedHash) {
 		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
+	}
+
+	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
+	if !strings.HasPrefix(storedHash, "$2") {
+		migratePasswordToBcrypt(username, password)
 	}
 
 	// Login successful
@@ -171,7 +209,7 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 	monitor.LogAction(username, "Logged in", "user")
 
 	if username == "admin" {
-		if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte("changeme")); err == nil {
+		if checkPassword("changeme", storedHash) {
 			http.Redirect(w, r, "/change_password", http.StatusSeeOther)
 			return
 		}
