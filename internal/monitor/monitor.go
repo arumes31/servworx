@@ -53,9 +53,7 @@ func GetHistory(serviceName string) []string {
 		return []string{}
 	}
 	result := make([]string, len(h))
-	for i, v := range h {
-		result[i] = v
-	}
+	copy(result, h)
 	return result
 }
 
