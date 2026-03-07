@@ -79,7 +79,7 @@ jobs:
 
       # 3. Image Security Scanning (Trivy)
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           format: 'sarif'
