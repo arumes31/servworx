@@ -5,458 +5,897 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Servworx Service Configuration</title>
     <style>
+        :root {
+            --primary: #6b21a8;
+            --primary-hover: #a855f7;
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #4a5568;
+            --success: #2f855a;
+            --success-bg: #d1fae5;
+            --danger: #c53030;
+            --danger-bg: #fee2e2;
+            --warning: #d69e2e;
+            --warning-bg: #fef3c7;
+            --neutral: #718096;
+        }
+
         body {
             margin: 0;
-            font-family: 'Arial', sans-serif;
-            background: #f3f4f6;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
             min-height: 100vh;
             padding: 2rem;
+            color: var(--text-main);
         }
+        
         .container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
-            background: #ffffff;
+            background: var(--card-bg);
             padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
+
         h1 {
-            color: #6b21a8;
+            color: var(--primary);
             text-align: center;
-            margin-bottom: 2rem;
-            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+            font-weight: 700;
         }
+
+        /* Overview Header */
+        .overview-header {
+            display: flex;
+            justify-content: space-around;
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            border: 1px solid #e2e8f0;
+        }
+        .metric-box { display: flex; flex-direction: column; }
+        .metric-value { font-size: 2rem; font-weight: bold; }
+        .metric-label { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.25rem;}
+        .metric-total { color: var(--primary); }
+        .metric-online { color: var(--success); }
+        .metric-offline { color: var(--danger); }
+
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
         .error, .logs {
-            color: #dc2626;
+            color: var(--danger);
             text-align: center;
             margin-bottom: 1rem;
             font-size: 0.9rem;
+            padding: 0.5rem;
+            background: var(--danger-bg);
+            border-radius: 4px;
         }
-        .services-grid {
+
+        /* Grid / List Layouts */
+        .services-wrapper.grid-view {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 1.5rem;
         }
+        .services-wrapper.list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .services-wrapper.list-view .service {
+            padding: 0.4rem 0.75rem;
+            border-radius: 4px;
+        }
+        .services-wrapper.list-view .service-header {
+            margin-bottom: 0;
+            flex-wrap: nowrap;
+        }
+        .services-wrapper.list-view .service-header h3 {
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .services-wrapper.list-view .status-info {
+            display: none !important;
+        }
+
         .service {
-            background: #ffffff;
+            background: var(--card-bg);
             padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+            position: relative;
         }
-        .service:hover {
-            transform: translateY(-2px);
+        .services-wrapper.grid-view .service:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
         }
-        .service.paused {
-            background: #fef3c7;
-        }
-        .service.up {
-            background: #d1fae5;
-        }
-        .service.down {
-            background: #fee2e2;
-        }
+        .service.paused { border-left: 5px solid var(--warning); background: var(--warning-bg); }
+        .service.up { border-left: 5px solid var(--success); }
+        .service.down { border-left: 5px solid var(--danger); background: var(--danger-bg); }
+
         .service-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 1rem;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
         }
         .service-header h3 {
-            color: #6b21a8;
+            color: var(--primary);
             margin: 0;
             font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        .status-info p {
-            margin: 0.5rem 0;
-            font-size: 0.95rem;
-            color: #374151;
+
+        /* Pulse Dot */
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
         }
-        .status-up {
-            color: #2f855a;
-            font-weight: 600;
+        .status-up .pulse-dot { background-color: var(--success); box-shadow: 0 0 0 0 rgba(47,133,90, 0.7); animation: pulse-green 2s infinite; }
+        .status-down .pulse-dot { background-color: var(--danger); box-shadow: 0 0 0 0 rgba(197,48,48, 0.7); animation: pulse-red 2s infinite; }
+        .status-paused .pulse-dot { background-color: var(--warning); }
+        .status-checking .pulse-dot { background-color: var(--warning); animation: pulse-yellow 1s infinite; }
+        .status-unknown .pulse-dot { background-color: var(--neutral); }
+
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(47,133,90, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(47,133,90, 0); } 100% { box-shadow: 0 0 0 0 rgba(47,133,90, 0); } }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(197,48,48, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(197,48,48, 0); } 100% { box-shadow: 0 0 0 0 rgba(197,48,48, 0); } }
+        @keyframes pulse-yellow { 0% { box-shadow: 0 0 0 0 rgba(214,158,46, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(214,158,46, 0); } 100% { box-shadow: 0 0 0 0 rgba(214,158,46, 0); } }
+
+        .status-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
         }
-        .status-down {
-            color: #c53030;
-            font-weight: 600;
+
+        /* Sparkline */
+        .sparkline-container {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 30px;
+            margin-top: 0.5rem;
+            padding-top: 5px;
+            border-top: 1px solid #e2e8f0;
         }
-        .status-checking {
-            color: #d69e2e;
-            font-weight: 600;
+        .spark-bar {
+            flex: 1;
+            border-radius: 2px 2px 0 0;
+            min-width: 3px;
+            transition: height 0.3s;
         }
-        .status-unknown {
-            color: #718096;
-            font-weight: 600;
-        }
-        .status-paused {
-            color: #805ad5;
-            font-weight: 600;
-        }
+        .spark-up { background: var(--success); height: 100%; }
+        .spark-down { background: var(--danger); height: 20%; }
+        .spark-checking { background: var(--warning); height: 60%; }
+        .spark-unknown { background: var(--neutral); height: 10%; }
+
+        /* Forms */
         .service-form {
             display: none;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
             padding-top: 1rem;
             border-top: 1px solid #e2e8f0;
+            animation: fadeIn 0.3s;
         }
-        .service-form.active {
-            display: grid;
-        }
+        .service-form.active { display: grid; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-group { position: relative; }
+        
         .service-form label {
             font-size: 0.9rem;
-            font-weight: 500;
-            color: #4a5568;
+            font-weight: 600;
+            color: var(--text-muted);
             margin-bottom: 0.25rem;
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        .service-form input[type="text"],
-        .service-form input[type="number"] {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #d8b4fe;
+        
+        /* Tooltip */
+        .tooltip-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #cbd5e0;
+            color: white;
+            font-size: 10px;
+            cursor: help;
+            position: relative;
+        }
+        .tooltip-icon::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d3748;
+            color: white;
+            padding: 4px 8px;
             border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: 0.2s;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .tooltip-icon:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .service-form input {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
             font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.3s;
+            box-sizing: border-box;
+            transition: all 0.2s;
         }
-        .service-form input:focus {
-            border-color: #6b21a8;
-        }
-        .service-form .full-width {
-            grid-column: 1 / -1;
-        }
-        .service-form p {
-            font-size: 0.9rem;
-            color: #4a5568;
-            margin: 0.5rem 0;
-        }
-        .toggle-btn {
-            background: #6b21a8;
+        .service-form input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(107, 33, 168, 0.2); }
+        .service-form input:invalid { border-color: var(--danger); }
+        
+        .service-form .full-width { grid-column: 1 / -1; }
+        
+        /* Buttons */
+        .btn {
+            background: var(--primary);
             color: #ffffff;
             padding: 0.5rem 1rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: background 0.3s;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            text-decoration: none;
         }
-        .toggle-btn:hover {
-            background: #a855f7;
-        }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: #9b2c2c; }
+        .btn-secondary { background: var(--neutral); }
+        .btn-secondary:hover { background: #4a5568; }
+
         .action-select {
             padding: 0.5rem;
-            border: 1px solid #d8b4fe;
-            border-radius: 4px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
             font-size: 0.9rem;
-            background: #ffffff;
             cursor: pointer;
-            transition: border-color 0.3s;
-        }
-        .action-select:focus {
-            border-color: #6b21a8;
             outline: none;
         }
-        .update-btn {
-            background: #6b21a8;
-            color: #ffffff;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            width: 100%;
-            margin-top: 0.5rem;
-            transition: background 0.3s;
+        
+        /* Spinner */
+        .spinner {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            animation: spin 1s linear infinite;
+            display: none;
         }
-        .update-btn:hover {
-            background: #a855f7;
-        }
-        .delete-btn {
-            background: #dc2626;
-            color: #ffffff;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            width: 100%;
-            margin-top: 0.5rem;
-            transition: background 0.3s;
-        }
-        .delete-btn:hover {
-            background: #b91c1c;
-        }
-        .action-buttons {
+        .btn.loading .spinner { display: inline-block; }
+        .btn.loading span { display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Toasts */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
             display: flex;
-            justify-content: center;
-            margin-top: 1.5rem;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 9999;
         }
-        .action-buttons button {
-            background: #6b21a8;
-            color: #ffffff;
-            padding: 0.75rem 1.5rem;
-            border: none;
+        .toast {
+            background: white;
+            border-left: 4px solid var(--primary);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 1rem 1.5rem;
             border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            min-width: 250px;
+            animation: slideIn 0.3s ease forwards;
         }
-        .action-buttons button:hover {
-            background: #a855f7;
-        }
-        .logout {
-            display: block;
-            text-align: center;
-            margin-top: 1.5rem;
-            color: #6b21a8;
-            text-decoration: none;
-            font-size: 0.95rem;
-        }
-        .logout:hover {
-            text-decoration: underline;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 2rem;
-            color: #6b21a8;
-            font-size: 0.8rem;
-        }
-        .footer a {
-            color: #6b21a8;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
-        }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; } }
+
+        /* Modals */
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            backdrop-filter: blur(2px);
         }
         .modal-content {
-            background: #ffffff;
-            padding: 1.5rem;
-            border-radius: 8px;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
             width: 90%;
-            max-width: 500px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            text-align: left;
-            max-height: 80vh;
-            overflow-y: auto;
+            max-width: 600px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
         }
-        .modal-content p {
-            font-size: 1rem;
-            margin-bottom: 1.5rem;
-            color: #4a5568;
-        }
+        .modal-content h2 { margin-top: 0; color: var(--primary); }
         .modal-content pre {
-            background: #f7fafc;
+            background: #1a202c;
+            color: #e2e8f0;
             padding: 1rem;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 0.85rem;
+            height: 300px;
+            overflow-y: auto;
             white-space: pre-wrap;
-            word-wrap: break-word;
+            scroll-behavior: smooth;
         }
-        .modal-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
+        
+        /* Log Syntax Highlighting */
+        .log-error { color: #fc8181; font-weight: bold; }
+        .log-warn { color: #f6ad55; }
+        .log-info { color: #63b3ed; }
+        .log-success { color: #68d391; }
+
+        .modal-buttons { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
+
+        /* Utilities */
+        .text-center { text-align: center; }
+        .mt-2 { margin-top: 2rem; }
+        .flex { display: flex; }
+        .gap-1 { gap: 1rem; }
+        .visibility-hidden { visibility: hidden; }
+
+        /* Delete confirmation */
+        #delete-confirm-input {
+            width: 100%; padding: 0.5rem; border: 1px solid #cbd5e0; border-radius: 4px; margin: 1rem 0;
         }
-        .modal-buttons button {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.3s;
-        }
-        .modal-cancel {
-            background: #718096;
-            color: #ffffff;
-        }
-        .modal-cancel:hover {
-            background: #5a6b7d;
-        }
-        .modal-confirm {
-            background: #dc2626;
-            color: #ffffff;
-        }
-        .modal-confirm:hover {
-            background: #b91c1c;
-        }
-        @media (max-width: 600px) {
-            .container {
-                margin: 1rem;
-                padding: 1.5rem;
-            }
-            .services-grid {
-                grid-template-columns: 1fr;
-            }
-            .service-form {
-                grid-template-columns: 1fr;
-            }
-            h1 {
-                font-size: 1.5rem;
-            }
-            .service-header h3 {
-                font-size: 1.1rem;
-            }
-            .toggle-btn, .action-select, .update-btn, .delete-btn {
-                font-size: 0.85rem;
-                padding: 0.5rem;
-            }
-        }
+
     </style>
-    <script>
-        function toggleConfig(id) {
-            const form = document.getElementById(id);
-            const btn = document.getElementById('toggle-' + id);
-            form.classList.toggle('active');
-            btn.textContent = form.classList.contains('active') ? 'Hide' : 'Configure';
-        }
-        function showDeleteModal(serviceName, formId) {
-            const modal = document.getElementById('delete-modal');
-            const modalText = document.getElementById('modal-text');
-            const modalFormId = document.getElementById('modal-form-id');
-            modalText.textContent = `Are you sure you want to delete ${serviceName}?`;
-            modalFormId.value = formId;
-            modal.style.display = 'flex';
-        }
-        function closeDeleteModal() {
-            document.getElementById('delete-modal').style.display = 'none';
-        }
-        function confirmDelete() {
-            const formId = document.getElementById('modal-form-id').value;
-            document.getElementById(formId).submit();
-        }
-        function showLogsModal(logs) {
-            const modal = document.getElementById('logs-modal');
-            const modalLogs = document.getElementById('modal-logs');
-            modalLogs.textContent = logs;
-            modal.style.display = 'flex';
-        }
-        function closeLogsModal() {
-            document.getElementById('logs-modal').style.display = 'none';
-        }
-        function handleAction(select, index) {
-            const action = select.value;
-            if (action === 'force_restart') {
-                window.location.href = '/force_restart/' + index;
-            } else if (action === 'pause_monitoring' || action === 'resume_monitoring') {
-                window.location.href = '/pause_monitoring/' + index;
-            } else if (action === 'view_logs') {
-                fetch('/view_logs/' + index)
-                    .then(response => response.text())
-                    .then(html => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const logs = doc.querySelector('pre.logs')?.textContent || 'No logs available';
-                        showLogsModal(logs);
-                    })
-                    .catch(error => alert('Failed to load logs: ' + error));
-            }
-            select.value = '';
-        }
-    </script>
 </head>
 <body>
+    <div class="toast-container" id="toast-container"></div>
+
     <div class="container">
-        <h1>Servworx Service Configuration</h1>
-        {% if error %}
-            <p class="error">{{ error }}</p>
-        {% endif %}
-        {% if logs %}
-            <pre class="logs" style="display: none;">{{ logs }}</pre>
-        {% endif %}
-        <div class="services-grid">
-            {% for service in services %}
-            {% set status = (status.services | selectattr('name', 'equalto', service.name) | first) or {'status': 'Unknown', 'last_failure': None, 'down_since': None, 'up_since': None, 'down_for': None, 'up_for': None, 'time_to_restart': format_duration(service.interval * service.retries)} %}
-            <div class="service {{ 'paused' if service.paused else status.status.lower() }}">
+        <h1>Servworx Dashboard</h1>
+
+        <div class="overview-header" id="dashboard-overview">
+            <div class="metric-box">
+                <span class="metric-value metric-total" id="metric-total">0</span>
+                <span class="metric-label">Total Services</span>
+            </div>
+            <div class="metric-box">
+                <span class="metric-value metric-online" id="metric-online">0</span>
+                <span class="metric-label">Online</span>
+            </div>
+            <div class="metric-box">
+                <span class="metric-value metric-offline" id="metric-offline">0</span>
+                <span class="metric-label">Offline</span>
+            </div>
+        </div>
+
+        <div class="controls-bar">
+            <div class="flex gap-1">
+                <button class="btn btn-outline" onclick="toggleViewMode()" id="view-toggle-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+                    <span>List View</span>
+                </button>
+            </div>
+            <form id="add-service-form" method="post" action="/add_service" onsubmit="handleFormAjax(event, 'Adding Service...')">
+                <button type="submit" class="btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Add New Service</span>
+                </button>
+            </form>
+        </div>
+
+        {{ if .Error }}
+            <p class="error">{{ .Error }}</p>
+        {{ end }}
+
+        <div class="services-wrapper grid-view" id="services-container">
+            {{ range $i, $service := .Services }}
+            {{ $status := "" }}
+            {{ if lt $i (len $.Status.Services) }}
+                {{ $status = index $.Status.Services $i }}
+            {{ end }}
+            
+            <div class="service {{ if $service.Paused }}paused status-paused{{ else if $status }}{{ if eq $status.Status "Up" }}up status-up{{ else if eq $status.Status "Down" }}down status-down{{ end }}{{ end }}" id="service-card-{{$i}}">
                 <div class="service-header">
-                    <h3>{{ service.name }}</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <select class="action-select" onchange="handleAction(this, {{ loop.index0 }})">
-                            <option value="" selected>Select Action</option>
+                    <h3>
+                        <span class="pulse-dot" id="dot-{{$i}}"></span>
+                        <span id="title-{{$i}}">{{ $service.Name }}</span>
+                    </h3>
+                    <div class="flex gap-1">
+                        <select class="action-select" onchange="handleAction(this, '{{ $i }}', '{{ $service.Name }}')">
+                            <option value="" selected>Actions...</option>
                             <option value="force_restart">Force Restart</option>
-                            <option value="{{ 'resume_monitoring' if service.paused else 'pause_monitoring' }}">{{ 'Resume Monitoring' if service.paused else 'Pause Monitoring' }}</option>
-                            <option value="view_logs">View Logs</option>
+                            <option value="{{ if $service.Paused }}resume_monitoring{{ else }}pause_monitoring{{ end }}" id="pause-opt-{{$i}}">
+                                {{ if $service.Paused }}Resume Monitoring{{ else }}Pause Monitoring{{ end }}
+                            </option>
+                            <option value="view_logs">Live Logs</option>
                         </select>
-                        <button type="button" id="toggle-form-{{ loop.index0 }}" class="toggle-btn" onclick="toggleConfig('form-{{ loop.index0 }}')">Configure</button>
+                        <button type="button" id="toggle-form-{{ $i }}" class="btn btn-outline" onclick="toggleConfig('form-{{ $i }}')">Configure</button>
                     </div>
                 </div>
+
                 <div class="status-info">
-                    <p>Status: <span class="status-{{ status.status|lower }}{{ ' status-paused' if service.paused else '' }}">{{ 'Paused' if service.paused else status.status }}</span></p>
-                    <p>Last Failure: {{ status.last_failure or 'Never' }}</p>
-                    {% if status.down_since %}
-                        <p>Down Since: {{ status.down_since }}</p>
-                        <p>Down For: {{ status.down_for or 'N/A' }}</p>
-                    {% endif %}
-                    {% if status.up_since %}
-                        <p>Up Since: {{ status.up_since }}</p>
-                        <p>Up For: {{ status.up_for or 'N/A' }}</p>
-                    {% endif %}
+                    <div id="status-text-{{$i}}">
+                        <!-- Content populated dynamically or statically on load -->
+                        {{ if $status }}
+                            <p><strong>Status:</strong> {{ if $service.Paused }}Paused{{ else }}{{ $status.Status }}{{ end }}</p>
+                            <p><strong>Last Failure:</strong> {{ if $status.LastFailure }}{{ $status.LastFailure }}{{ else }}Never{{ end }}</p>
+                        {{ else }}
+                            <p><strong>Status:</strong> Unknown</p>
+                        {{ end }}
+                    </div>
+                    <div id="duration-text-{{$i}}">
+                        {{ if $status }}
+                            {{ if $status.DownSince }}
+                                <p><strong>Down Since:</strong> {{ $status.DownSince }}</p>
+                            {{ end }}
+                            {{ if $status.UpSince }}
+                                <p><strong>Up Since:</strong> {{ $status.UpSince }}</p>
+                            {{ end }}
+                        {{ end }}
+                    </div>
+                    
+                    <!-- Sparkline History -->
+                    <div class="sparkline-container" id="sparkline-{{$i}}" title="Last 30 health checks">
+                        <!-- Populated via JS -->
+                    </div>
                 </div>
-                <form id="service-form-{{ loop.index0 }}" method="post" action="{{ url_for('update_service', index=loop.index0) }}">
-                    <div id="form-{{ loop.index0 }}" class="service-form">
-                        <label for="name_{{ loop.index0 }}">Service Name:</label>
-                        <input type="text" id="name_{{ loop.index0 }}" name="name" value="{{ service.name }}" required>
-                        <label for="website_url_{{ loop.index0 }}">URL to Monitor:</label>
-                        <input type="text" id="website_url_{{ loop.index0 }}" name="website_url" value="{{ service.website_url }}" required>
-                        <label for="container_names_{{ loop.index0 }}">Container Names (comma-separated):</label>
-                        <input type="text" id="container_names_{{ loop.index0 }}" name="container_names" value="{{ service.container_names }}" required>
-                        <label for="retries_{{ loop.index0 }}">Retries:</label>
-                        <input type="number" id="retries_{{ loop.index0 }}" name="retries" value="{{ service.retries }}" required min="1">
-                        <label for="interval_{{ loop.index0 }}">Interval (seconds):</label>
-                        <input type="number" id="interval_{{ loop.index0 }}" name="interval" value="{{ service.interval }}" required min="1">
-                        <label for="grace_period_{{ loop.index0 }}">Grace Period (seconds):</label>
-                        <input type="number" id="grace_period_{{ loop.index0 }}" name="grace_period" value="{{ service.grace_period }}" required min="1">
-                        <label for="accepted_status_codes_{{ loop.index0 }}">Accepted Status Codes (comma-separated):</label>
-                        <input type="text" id="accepted_status_codes_{{ loop.index0 }}" name="accepted_status_codes" value="{{ service.accepted_status_codes|join(', ') }}" placeholder="e.g., 200, 201">
-                        <p class="full-width">Time to Restart on Failure: {{ status.time_to_restart }}</p>
-                        <button type="submit" name="action" value="update" class="update-btn full-width">Update Service</button>
-                        <button type="button" class="delete-btn full-width" onclick="showDeleteModal('{{ service.name }}', 'service-form-{{ loop.index0 }}')">Delete Service</button>
-                        <input type="hidden" name="action" value="delete">
+
+                <form id="service-form-{{ $i }}" method="post" action="/update_service/{{ $i }}" onsubmit="handleFormAjax(event, 'Updating Service...')">
+                    <div id="form-{{ $i }}" class="service-form">
+                        <div class="form-group">
+                            <label>Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
+                            <input type="text" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
+                        </div>
+                        <div class="form-group">
+                            <label>URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
+                            <input type="url" name="website_url" value="{{ $service.WebsiteURL }}" required>
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
+                            <input type="text" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
+                        </div>
+                        <div class="form-group">
+                            <label>Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
+                            <input type="number" name="retries" value="{{ $service.Retries }}" required min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Interval (sec) <span class="tooltip-icon" data-tooltip="Seconds between pings">?</span></label>
+                            <input type="number" name="interval" value="{{ $service.Interval }}" required min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Grace Period (sec) <span class="tooltip-icon" data-tooltip="Delay after a restart before restarts are allowed again">?</span></label>
+                            <input type="number" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
+                            <input type="text" id="codes_{{ $i }}" name="accepted_status_codes" placeholder="200, 201">
+                        </div>
+                        <div class="form-group full-width" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="insecure_{{ $i }}" name="insecure_skip_verify" style="width: auto; margin:0;" {{ if $service.InsecureSkipVerify }}checked{{ end }}>
+                            <label for="insecure_{{ $i }}" style="margin:0;">Allow Insecure TLS (Self-Signed Certificates) <span class="tooltip-icon" data-tooltip="Skips verifying the TLS certificate chain when pinging the website URL. Useful for internal or self-signed domains.">?</span></label>
+                        </div>
+                        
+                        <p class="full-width" style="color: var(--text-muted); font-size: 0.85rem">
+                            Time to Restart on Failure: <span id="ttr-{{$i}}">{{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</span>
+                        </p>
+                        
+                        <button type="submit" name="form_action" value="update" class="btn full-width">
+                            <span>Update Service</span><div class="spinner"></div>
+                        </button>
+                        <button type="button" class="btn btn-danger full-width" onclick="showDeleteModal('{{ $service.Name }}', '/update_service/{{ $i }}')">Delete Service</button>
+                        <input type="hidden" name="form_action" id="action-{{$i}}" value="update">
                     </div>
                 </form>
             </div>
-            {% endfor %}
-        </div>
-        <form id="add-service-form" method="post" action="{{ url_for('add_service') }}">
-            <div class="action-buttons">
-                <button type="submit">Add New Service</button>
+            
+            <script>
+                // Seed initial array values
+                document.getElementById('codes_{{ $i }}').value = "{{ range $idx, $code := $service.AcceptedStatusCodes }}{{ if $idx }}, {{ end }}{{ $code }}{{ end }}";
+            </script>
+            {{ end }}
+            
+            {{ if eq (len .Services) 0 }}
+            <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted);">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity: 0.5; margin-bottom: 1rem;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <h2>No Services Configured</h2>
+                <p>Click "Add New Service" to get started with monitoring.</p>
             </div>
-        </form>
-        <a href="{{ url_for('logout') }}" class="logout">Logout</a>
-        <div class="footer">
-            Powered by <a href="#">Servworx</a> - Monitor Your Services with Ease
+            {{ end }}
+        </div>
+
+        <div class="footer text-center mt-2">
+            <a href="/logout" class="btn btn-secondary" style="margin-bottom: 2rem;">Logout</a>
+            <p>Powered by <a href="https://github.com/arumes31/servworx" target="_blank">Servworx</a></p>
         </div>
     </div>
+
+    <!-- Modals -->
     <div id="delete-modal" class="modal">
         <div class="modal-content">
-            <p id="modal-text"></p>
-            <div class="modal-buttons">
-                <button class="modal-cancel" onclick="closeDeleteModal()">Cancel</button>
-                <button class="modal-confirm" onclick="confirmDelete()">Confirm</button>
-            </div>
-            <input type="hidden" id="modal-form-id">
+            <h2>Confirm Deletion</h2>
+            <p>Are you sure you want to delete <strong id="delete-target-name"></strong>?</p>
+            <p style="font-size:0.9rem; color: var(--danger);">This action cannot be undone. Please type the exact service name to confirm:</p>
+            <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()">
+            
+            <form id="delete-form" method="post" action="" onsubmit="handleFormAjax(event, 'Deleting Service...')">
+                <input type="hidden" name="form_action" value="delete">
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('delete-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger" id="delete-confirm-btn" disabled>Delete Forever</button>
+                </div>
+            </form>
         </div>
     </div>
+
     <div id="logs-modal" class="modal">
-        <div class="modal-content">
-            <p>Container Logs for {{ logs_service or 'Service' }}</p>
-            <pre id="modal-logs"></pre>
+        <div class="modal-content" style="max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="margin:0;">Live Logs: <span id="log-target-name"></span></h2>
+                <span id="log-status" style="font-size: 0.8rem; padding: 2px 8px; border-radius: 12px; background: var(--success-bg); color: var(--success);">● Connecting...</span>
+            </div>
+            <pre id="modal-logs">Waiting for stream...</pre>
             <div class="modal-buttons">
-                <button class="modal-cancel" onclick="closeLogsModal()">Close</button>
+                <button class="btn btn-secondary" onclick="closeLogsModal()">Close Stream</button>
             </div>
         </div>
     </div>
+
+    <script>
+        // --- UX State Variables ---
+        let currentEventSource = null;
+
+        // --- View Toggles ---
+        function toggleConfig(id) {
+            const form = document.getElementById(id);
+            form.classList.toggle('active');
+        }
+
+        function toggleViewMode() {
+            const wrapper = document.getElementById('services-container');
+            const btnSpan = document.querySelector('#view-toggle-btn span');
+            if (wrapper.classList.contains('grid-view')) {
+                wrapper.classList.replace('grid-view', 'list-view');
+                btnSpan.textContent = 'Grid View';
+                localStorage.setItem('servworx-view', 'list');
+            } else {
+                wrapper.classList.replace('list-view', 'grid-view');
+                btnSpan.textContent = 'List View';
+                localStorage.setItem('servworx-view', 'grid');
+            }
+        }
+
+        // Initialize view mode
+        if (localStorage.getItem('servworx-view') === 'list') {
+            document.getElementById('services-container').classList.replace('grid-view', 'list-view');
+            document.querySelector('#view-toggle-btn span').textContent = 'Grid View';
+        }
+
+        // --- Toasts ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = type === 'success' ? 
+                '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' :
+                '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+
+            const iconEl = document.createElement('span');
+            iconEl.style.color = type === 'success' ? 'var(--success)' : 'var(--danger)';
+            iconEl.innerHTML = icon; // safe: static SVG defined above
+
+            const msgEl = document.createElement('div');
+            msgEl.textContent = message;
+
+            toast.appendChild(iconEl);
+            toast.appendChild(msgEl);
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- AJAX Form Handling ---
+        function handleFormAjax(e, loadingText) {
+            e.preventDefault();
+            const form = e.target;
+            const btn = form.querySelector('button[type="submit"]');
+            const btnSpan = btn.querySelector('span');
+            const originalText = btnSpan ? btnSpan.textContent : btn.textContent;
+            
+            // UI Loading state
+            btn.classList.add('loading');
+            if (btnSpan) btnSpan.textContent = loadingText;
+
+            const formData = new FormData(form);
+            const urlEncoded = new URLSearchParams(formData).toString();
+
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: urlEncoded
+            })
+            .then(res => {
+                if (res.headers.get('content-type')?.includes('application/json')) {
+                    return res.json().then(data => ({ status: res.status, data }));
+                }
+                // Fallback if not JSON — reload to get fresh DOM
+                if (res.redirected || res.ok) {
+                    window.location.reload();
+                    return null;
+                }
+                throw new Error("Server Error");
+            })
+            .then(result => {
+                if (!result) return; // reloading
+                const { status, data } = result;
+                if (status >= 400 || !data.success) {
+                    showToast(data.message || data.error || "Action failed", "error");
+                } else {
+                    showToast(data.message || "Success", "success");
+                    if (form.id === 'delete-form') closeModal('delete-modal');
+                    fetchStatus(); // trigger immediate refresh
+                }
+            })
+            .catch(err => showToast("Network error: " + err, "error"))
+            .finally(() => {
+                btn.classList.remove('loading');
+                if (btnSpan) btnSpan.textContent = originalText;
+            });
+        }
+
+        // --- Modals & Actions ---
+        function handleAction(select, index, name) {
+            const action = select.value;
+            select.value = ''; // reset
+            if (!action) return;
+
+            if (action === 'force_restart' || action === 'pause_monitoring' || action === 'resume_monitoring') {
+                // Map resume_monitoring to the toggle endpoint
+                const endpoint = action === 'resume_monitoring' ? 'pause_monitoring' : action;
+                const url = `/${endpoint}/${index}`;
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(res => {
+                        if (res.redirected || res.ok) {
+                            showToast(action.replace(/_/g, ' ') + ' initiated');
+                            fetchStatus();
+                        } else { showToast("Failed to initiate action", "error"); }
+                    }).catch(e => showToast("Error: " + e, "error"));
+            } else if (action === 'view_logs') {
+                openLogsStream(index, name);
+            }
+        }
+
+        let targetDeleteName = "";
+        function showDeleteModal(name, actionUrl) {
+            targetDeleteName = name;
+            document.getElementById('delete-target-name').textContent = name;
+            document.getElementById('delete-form').action = actionUrl;
+            document.getElementById('delete-confirm-input').value = "";
+            document.getElementById('delete-confirm-btn').disabled = true;
+            document.getElementById('delete-modal').style.display = 'flex';
+        }
+
+        function validateDelete() {
+            const input = document.getElementById('delete-confirm-input').value;
+            document.getElementById('delete-confirm-btn').disabled = (input !== targetDeleteName);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // --- Live Logs SSE ---
+        function openLogsStream(index, name) {
+            document.getElementById('log-target-name').textContent = name;
+            const logBox = document.getElementById('modal-logs');
+            const statusIndicator = document.getElementById('log-status');
+            logBox.innerHTML = '';
+            document.getElementById('logs-modal').style.display = 'flex';
+
+            if (currentEventSource) currentEventSource.close();
+            
+            currentEventSource = new EventSource(`/api/logs/stream/${index}`);
+            
+            currentEventSource.onopen = () => {
+                statusIndicator.textContent = "● Streaming Live";
+                statusIndicator.style.color = "var(--success)";
+            };
+
+            currentEventSource.onmessage = (event) => {
+                const raw = event.data;
+                const line = document.createElement('span');
+                // Classify via regex but render as text (no XSS)
+                if (/error|fail|exception|fatal/i.test(raw)) line.className = 'log-error';
+                else if (/warn/i.test(raw)) line.className = 'log-warn';
+                else if (/info/i.test(raw)) line.className = 'log-info';
+                else if (/success|ok|completed/i.test(raw)) line.className = 'log-success';
+                line.textContent = raw;
+                logBox.appendChild(line);
+                logBox.appendChild(document.createTextNode('\n'));
+                // Auto scroll down safely
+                logBox.scrollTop = logBox.scrollHeight;
+            };
+
+            currentEventSource.onerror = () => {
+                statusIndicator.textContent = "● Connection Closed";
+                statusIndicator.style.color = "var(--danger)";
+                currentEventSource.close();
+            };
+        }
+
+        function closeLogsModal() {
+            closeModal('logs-modal');
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+        }
+
+        // --- Dashboard Polling & Sparklines ---
+        function renderSparklines(id, history) {
+            const container = document.getElementById('sparkline-' + id);
+            if (!container) return;
+            container.innerHTML = '';
+            history.forEach(status => {
+                const bar = document.createElement('div');
+                bar.className = 'spark-bar spark-' + status.toLowerCase();
+                container.appendChild(bar);
+            });
+        }
+
+        function updateDashboardUI(data) {
+            let online = 0; let offline = 0;
+            
+            data.services.forEach((svc, i) => {
+                if (i >= data.status.services.length) return;
+                const status = data.status.services[i];
+                
+                // Metrics
+                if (!svc.paused) {
+                    if (status.status === 'Up') online++;
+                    if (status.status === 'Down') offline++;
+                }
+
+                // Update Card Classes
+                const card = document.getElementById('service-card-' + i);
+                if (card) {
+                    card.className = `service ${svc.paused ? 'paused' : status.status.toLowerCase()} status-${status.status.toLowerCase()}`;
+                    if (svc.paused) card.classList.add('status-paused');
+                }
+
+                // Update Text Elements
+                const statusBox = document.getElementById('status-text-' + i);
+                if (statusBox) {
+                    statusBox.textContent = '';
+                    const p1 = document.createElement('p');
+                    const b1 = document.createElement('strong');
+                    b1.textContent = 'Status: ';
+                    p1.appendChild(b1);
+                    p1.appendChild(document.createTextNode(svc.paused ? 'Paused' : status.status));
+                    const p2 = document.createElement('p');
+                    const b2 = document.createElement('strong');
+                    b2.textContent = 'Last Failure: ';
+                    p2.appendChild(b2);
+                    p2.appendChild(document.createTextNode(status.last_failure || 'Never'));
+                    statusBox.appendChild(p1);
+                    statusBox.appendChild(p2);
+                }
+
+                const durationBox = document.getElementById('duration-text-' + i);
+                if (durationBox) {
+                    durationBox.textContent = '';
+                    if (status.down_since) {
+                        const p = document.createElement('p');
+                        const b = document.createElement('strong');
+                        b.textContent = 'Down Since: ';
+                        p.appendChild(b);
+                        p.appendChild(document.createTextNode(status.down_since.split(' ')[1]));
+                        durationBox.appendChild(p);
+                    }
+                    if (status.up_since) {
+                        const p = document.createElement('p');
+                        const b = document.createElement('strong');
+                        b.textContent = 'Up Since: ';
+                        p.appendChild(b);
+                        p.appendChild(document.createTextNode(status.up_since.split(' ')[1]));
+                        durationBox.appendChild(p);
+                    }
+                }
+
+                const ttr = document.getElementById('ttr-' + i);
+                if (ttr) ttr.textContent = status.time_to_restart || 'Unknown';
+
+                // Render Sparkline
+                if (status.history && status.history.length > 0) {
+                    renderSparklines(i, status.history);
+                }
+
+                // Update Action Dropdown text if toggled externally
+                const pauseOpt = document.getElementById('pause-opt-' + i);
+                if (pauseOpt) {
+                    pauseOpt.value = svc.paused ? 'resume_monitoring' : 'pause_monitoring';
+                    pauseOpt.textContent = svc.paused ? 'Resume Monitoring' : 'Pause Monitoring';
+                }
+            });
+
+            // Update Header Metrics
+            document.getElementById('metric-total').textContent = data.services.length;
+            document.getElementById('metric-online').textContent = online;
+            document.getElementById('metric-offline').textContent = offline;
+        }
+
+        function fetchStatus() {
+            fetch('/api/status', { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' } })
+                .then(res => res.json())
+                .then(data => updateDashboardUI(data))
+                .catch(err => console.error("Poll error", err));
+        }
+
+        // Initial Data render on load (the template injects the state on first load, but we want proper sparklines)
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchStatus(); 
+            // Start routine polling every 5s
+            setInterval(fetchStatus, 5000);
+        });
+
+    </script>
 </body>
 </html>

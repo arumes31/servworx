@@ -3,8 +3,7 @@
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
 ![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Python](https://img.shields.io/badge/Python-3-blue.svg?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.1.2-green.svg?logo=flask&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26.1+-blue.svg?logo=go&logoColor=white)
 ![Repo Size](https://img.shields.io/github/repo-size/arumes31/servworx)
 ![Last Commit](https://img.shields.io/github/last-commit/arumes31/servworx)
 
@@ -28,6 +27,7 @@ Usage: If a VPN container restarts and the underlying container loses its port, 
 - **Container Log Viewing**: Access the last 10 lines of logs for associated containers directly from the web interface.
 - **Pause/Resume Monitoring**: Temporarily pause or resume monitoring for individual services.
 - **Force Restart**: Manually trigger a restart of a service's containers.
+- **Self-Signed TLS Support**: Per-service option to allow insecure TLS connections for monitoring internal services with self-signed certificates.
 - **Docker Integration**: Leverages Docker for container management and restarts.
 
 ## Getting Started
@@ -82,11 +82,12 @@ You can manage services directly through the web interface.
 
 ```
 .
-├── app.py                  # Flask application main entry point
-├── requirements.txt        # Python dependencies
+├── main.go                 # Go application main entry point
+├── internal/               # Go packages (config, monitor, handlers)
+├── go.mod                  # Go dependencies
 ├── docker-compose.yaml     # Docker Compose configuration
 ├── Dockerfile              # Docker image build instructions
-├── templates/              # Jinja2 HTML templates
+├── templates/              # Go HTML templates
 │   ├── change_password.html
 │   ├── config.html
 │   └── login.html
@@ -95,10 +96,7 @@ You can manage services directly through the web interface.
 
 ## Built With
 
--   [Python](https://www.python.org/) - The programming language used
--   [Flask](https://flask.palletsprojects.com/) - The web framework used
--   [Waitress](https://docs.pylonproject.org/projects/waitress/en/latest/) - WSGI server
--   [Requests](https://docs.python-requests.org/en/master/) - HTTP library
+-   [Go](https://go.dev/) - The programming language used
 -   [Docker](https://www.docker.com/) - Containerization platform
 
 ## License
