@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -122,6 +123,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /force_restart/{index}", requireAuth(HandleForceRestartGET))
 	mux.HandleFunc("GET /pause_monitoring/{index}", requireAuth(HandlePauseMonitoringGET))
 	mux.HandleFunc("GET /view_logs/{index}", requireAuth(HandleViewLogsGET))
+
+	// JSON / AJAX UX Endpoints
+	mux.HandleFunc("GET /api/status", requireAuth(HandleAPIStatusGET))
+	mux.HandleFunc("GET /api/logs/stream/{index}", requireAuth(HandleAPILogsStreamGET))
 }
 
 func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
@@ -568,5 +573,136 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	monitor.LogAction("System", fmt.Sprintf("Initialized status for new service: %s", newName), "system")
 
 	monitor.RestartMonitoring()
+	
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
+		return
+	}
+	
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+// JSON Endpoint for Status Fetching
+func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
+	cfg, _ := config.LoadConfig()
+	status, _ := config.LoadStatus()
+	
+	currentTime := time.Now().Unix()
+
+	for i, svc := range cfg.Services {
+		if i < len(status.Services) {
+			s := &status.Services[i]
+			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+			if s.DownSince != nil {
+				t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
+				if err == nil {
+					df := formatDuration(currentTime - t.Unix())
+					s.DownFor = &df
+				} else {
+					errStr := "Invalid timestamp"
+					s.DownFor = &errStr
+				}
+			}
+			if s.UpSince != nil {
+				t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
+				if err == nil {
+					uf := formatDuration(currentTime - t.Unix())
+					s.UpFor = &uf
+				} else {
+					errStr := "Invalid timestamp"
+					s.UpFor = &errStr
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	data := ConfigViewData{
+		Services: cfg.Services,
+		Status:   *status,
+	}
+	
+	jsonBytes, err := json.Marshal(data)
+	if err == nil {
+		w.Write(jsonBytes)
+	} else {
+		http.Error(w, "Server error rendering JSON", http.StatusInternalServerError)
+	}
+}
+
+// JSON Endpoint for live streaming logs via SSE
+func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
+	idx, ok := parseIndex(w, r)
+	if !ok {
+		return
+	}
+
+	cfg, _ := config.LoadConfig()
+	if idx < 0 || idx >= len(cfg.Services) {
+		http.Error(w, "Invalid service index", http.StatusBadRequest)
+		return
+	}
+
+	svc := cfg.Services[idx]
+	containers := strings.Split(svc.ContainerNames, ",")
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	var targetContainer string
+	for _, c := range containers {
+		c = strings.TrimSpace(c)
+		if c != "" {
+			targetContainer = c
+			break
+		}
+	}
+
+	if targetContainer == "" {
+		fmt.Fprintf(w, "data: No valid containers found\n\n")
+		flusher.Flush()
+		return
+	}
+
+	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
+		flusher.Flush()
+		return
+	}
+	
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(w, "data: Error starting logs command\n\n")
+		flusher.Flush()
+		return
+	}
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := stdoutPipe.Read(buf)
+		if n > 0 {
+			lines := strings.Split(string(buf[:n]), "\n")
+			for _, line := range lines {
+				if line != "" {
+					fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
+				}
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			break
+		}
+	}
+	_ = cmd.Wait()
 }

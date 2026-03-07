@@ -1,2 +1,4 @@
 config/config.json
 config/status.json
+servworx.exe
+.env
