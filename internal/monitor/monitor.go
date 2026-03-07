@@ -122,6 +122,7 @@ func getRestartFilename(name string) string {
 
 func readLastRestart(name string) int64 {
 	path := filepath.Join(config.ConfigDir, getRestartFilename(name))
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0

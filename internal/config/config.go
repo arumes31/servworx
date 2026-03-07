@@ -167,7 +167,7 @@ func UpdateStatus(updateFn func(*Status)) error {
 
 	updateFn(&status)
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
 
@@ -202,7 +202,7 @@ func UpdateConfig(updateFn func(*Config)) error {
 
 	updateFn(&cfg)
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
 

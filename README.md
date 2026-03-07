@@ -25,6 +25,7 @@ servworx is a web-based service monitoring and auto-restart tool for Docker cont
 - **Container Log Viewing**: Access the last 10 lines of logs for associated containers directly from the web interface.
 - **Pause/Resume Monitoring**: Temporarily pause or resume monitoring for individual services.
 - **Force Restart**: Manually trigger a restart of a service's containers.
+- **Self-Signed TLS Support**: Per-service option to allow insecure TLS connections for monitoring internal services with self-signed certificates.
 - **Docker Integration**: Leverages Docker for container management and restarts.
 
 ## Getting Started

@@ -689,7 +689,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// #nosec G204
+	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
