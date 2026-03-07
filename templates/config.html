@@ -92,7 +92,39 @@
         .services-wrapper.list-view {
             display: flex;
             flex-direction: column;
+            gap: 0.25rem;
+        }
+        .services-wrapper.list-view .service {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+        }
+        .services-wrapper.list-view .service-header {
+            margin-bottom: 0;
+            flex-wrap: nowrap;
+        }
+        .services-wrapper.list-view .service-header h3 {
+            font-size: 0.95rem;
+            min-width: 120px;
+        }
+        .services-wrapper.list-view .status-info {
+            display: inline-flex;
             gap: 1rem;
+            margin-bottom: 0;
+            font-size: 0.85rem;
+            align-items: center;
+        }
+        .services-wrapper.list-view .status-info > div {
+            display: inline-flex;
+            gap: 0.5rem;
+        }
+        .services-wrapper.list-view .status-info p {
+            margin: 0;
+            white-space: nowrap;
+        }
+        .services-wrapper.list-view .sparkline-container,
+        .services-wrapper.list-view #duration-text-0,
+        .services-wrapper.list-view [id^="duration-text-"] {
+            display: none;
         }
 
         .service {
