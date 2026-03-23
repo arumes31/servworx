@@ -78,27 +78,20 @@ func formatDuration(seconds int64) string {
 	seconds %= 60
 
 	var parts []string
-	if days > 0 {
-		s := ""
-		if days != 1 {
-			s = "s"
+	appendPart := func(value int64, unit string) {
+		if value > 0 {
+			s := ""
+			if value != 1 {
+				s = "s"
+			}
+			parts = append(parts, fmt.Sprintf("%d %s%s", value, unit, s))
 		}
-		parts = append(parts, fmt.Sprintf("%d day%s", days, s))
 	}
-	if hours > 0 {
-		s := ""
-		if hours != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d hour%s", hours, s))
-	}
-	if minutes > 0 {
-		s := ""
-		if minutes != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d minute%s", minutes, s))
-	}
+
+	appendPart(days, "day")
+	appendPart(hours, "hour")
+	appendPart(minutes, "minute")
+
 	if seconds > 0 || len(parts) == 0 {
 		s := ""
 		if seconds != 1 {
