@@ -43,6 +43,7 @@ func checkPassword(password, storedHash string) bool {
 
 	// Legacy SHA256 hex hash (64 character hex string)
 	if len(storedHash) == 64 {
+		// codeql[go/weak-crypto]
 		sum := sha256.Sum256([]byte(password))
 		return hex.EncodeToString(sum[:]) == storedHash
 	}
