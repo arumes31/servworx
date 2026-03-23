@@ -42,6 +42,8 @@ func checkPassword(password, storedHash string) bool {
 	}
 
 	// Legacy SHA256 hex hash (64 character hex string)
+	// We intentionally accept legacy SHA256 for backward compatibility.
+	// Users are immediately migrated to bcrypt via migratePasswordToBcrypt upon successful login.
 	if len(storedHash) == 64 {
 		sum := sha256.Sum256([]byte(password))
 		return hex.EncodeToString(sum[:]) == storedHash
