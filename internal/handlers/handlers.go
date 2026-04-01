@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -33,7 +31,7 @@ func hashPassword(password string) (string, error) {
 }
 
 // checkPassword verifies a password against a stored hash.
-// It supports both bcrypt (Go) and SHA256 hex (legacy PHP) formats.
+// It supports bcrypt (Go) format.
 // Returns true if the password matches.
 func checkPassword(password, storedHash string) bool {
 	// Bcrypt hashes always start with "$2a$", "$2b$", or "$2y$"
@@ -41,28 +39,7 @@ func checkPassword(password, storedHash string) bool {
 		return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)) == nil
 	}
 
-	// Legacy SHA256 hex hash (64 character hex string)
-	// We intentionally accept legacy SHA256 for backward compatibility.
-	// Users are immediately migrated to bcrypt via migratePasswordToBcrypt upon successful login.
-	if len(storedHash) == 64 {
-		sum := sha256.Sum256([]byte(password))
-		return hex.EncodeToString(sum[:]) == storedHash
-	}
-
 	return false
-}
-
-// migratePasswordToBcrypt re-hashes a legacy password with bcrypt and saves it.
-func migratePasswordToBcrypt(username, password string) {
-	newHash, err := hashPassword(password)
-	if err != nil {
-		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
-		return
-	}
-	_ = config.UpdateConfig(func(cfg *config.Config) {
-		cfg.Users[username] = newHash
-	})
-	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
 }
 
 // formatDuration matches Python's format_duration output closely
@@ -191,11 +168,6 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
-	}
-
-	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
-	if !strings.HasPrefix(storedHash, "$2") {
-		migratePasswordToBcrypt(username, password)
 	}
 
 	// Login successful
