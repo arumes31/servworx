@@ -1,0 +1,63 @@
+--- templates/config.html
++++ templates/config.html
+@@ -293,7 +293,7 @@
+                         <span id="title-{{$i}}">{{ $service.Name }}</span>
+                     </h3>
+                     <div class="flex gap-1">
+-                        <select class="action-select" onchange="handleAction(this, '{{ $i }}', '{{ $service.Name }}')">
++                        <select class="action-select" aria-label="Actions for {{ $service.Name }}" onchange="handleAction(this, '{{ $i }}', '{{ $service.Name }}')">
+                             <option value="" selected>Actions...</option>
+                             <option value="force_restart">Force Restart</option>
+                             <option value="{{ if $service.Paused }}resume_monitoring{{ else }}pause_monitoring{{ end }}" id="pause-opt-{{$i}}">
+@@ -326,30 +326,30 @@
+                 <form id="service-form-{{ $i }}" method="post" action="/update_service/{{ $i }}" onsubmit="handleFormAjax(event, 'Updating Service...')">
+                     <div id="form-{{ $i }}" class="service-form">
+                         <div class="form-group">
+-                            <label>Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
+-                            <input type="text" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
++                            <label for="name-{{ $i }}">Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
++                            <input type="text" id="name-{{ $i }}" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
+                         </div>
+                         <div class="form-group">
+-                            <label>URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
+-                            <input type="url" name="website_url" value="{{ $service.WebsiteURL }}" required>
++                            <label for="website_url-{{ $i }}">URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
++                            <input type="url" id="website_url-{{ $i }}" name="website_url" value="{{ $service.WebsiteURL }}" required>
+                         </div>
+                         <div class="form-group full-width">
+-                            <label>Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
+-                            <input type="text" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
++                            <label for="container_names-{{ $i }}">Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
++                            <input type="text" id="container_names-{{ $i }}" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
+                         </div>
+                         <div class="form-group">
+-                            <label>Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
+-                            <input type="number" name="retries" value="{{ $service.Retries }}" required min="1">
++                            <label for="retries-{{ $i }}">Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
++                            <input type="number" id="retries-{{ $i }}" name="retries" value="{{ $service.Retries }}" required min="1">
+                         </div>
+                         <div class="form-group">
+-                            <label>Interval (sec) <span class="tooltip-icon" data-tooltip="Seconds between pings">?</span></label>
+-                            <input type="number" name="interval" value="{{ $service.Interval }}" required min="1">
++                            <label for="interval-{{ $i }}">Interval (sec) <span class="tooltip-icon" data-tooltip="Seconds between pings">?</span></label>
++                            <input type="number" id="interval-{{ $i }}" name="interval" value="{{ $service.Interval }}" required min="1">
+                         </div>
+                         <div class="form-group">
+-                            <label>Grace Period (sec) <span class="tooltip-icon" data-tooltip="Delay after a restart before restarts are allowed again">?</span></label>
+-                            <input type="number" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
++                            <label for="grace_period-{{ $i }}">Grace Period (sec) <span class="tooltip-icon" data-tooltip="Delay after a restart before restarts are allowed again">?</span></label>
++                            <input type="number" id="grace_period-{{ $i }}" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
+                         </div>
+                         <div class="form-group full-width">
+-                            <label>Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
++                            <label for="codes_{{ $i }}">Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
+                             <input type="text" id="codes_{{ $i }}" name="accepted_status_codes" placeholder="200, 201">
+                         </div>
+@@ -395,7 +395,7 @@
+             <h2>Confirm Deletion</h2>
+             <p>Are you sure you want to delete <strong id="delete-target-name"></strong>?</p>
+             <p style="font-size:0.9rem; color: var(--danger);">This action cannot be undone. Please type the exact service name to confirm:</p>
+-            <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()">
++            <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()" aria-label="Confirm exact service name to delete">
+
+             <form id="delete-form" method="post" action="" onsubmit="handleFormAjax(event, 'Deleting Service...')">

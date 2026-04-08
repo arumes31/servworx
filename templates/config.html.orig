@@ -29,7 +29,7 @@
             padding: 2rem;
             color: var(--text-main);
         }
-        
+
         .container {
             max-width: 1300px;
             margin: 0 auto;
@@ -205,7 +205,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
         .form-group { position: relative; }
-        
+
         .service-form label {
             font-size: 0.9rem;
             font-weight: 600;
@@ -215,7 +215,7 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         /* Tooltip */
         .tooltip-icon {
             display: inline-flex;
@@ -264,9 +264,9 @@
         }
         .service-form input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(107, 33, 168, 0.2); }
         .service-form input:invalid { border-color: var(--danger); }
-        
+
         .service-form .full-width { grid-column: 1 / -1; }
-        
+
         /* Buttons */
         .btn {
             background: var(--primary);
@@ -300,7 +300,7 @@
             cursor: pointer;
             outline: none;
         }
-        
+
         /* Spinner */
         .spinner {
             border: 2px solid rgba(255,255,255,0.3);
@@ -373,7 +373,7 @@
             white-space: pre-wrap;
             scroll-behavior: smooth;
         }
-        
+
         /* Log Syntax Highlighting */
         .log-error { color: #fc8181; font-weight: bold; }
         .log-warn { color: #f6ad55; }
@@ -442,7 +442,7 @@
             {{ if lt $i (len $.Status.Services) }}
                 {{ $status = index $.Status.Services $i }}
             {{ end }}
-            
+
             <div class="service {{ if $service.Paused }}paused status-paused{{ else if $status }}{{ if eq $status.Status "Up" }}up status-up{{ else if eq $status.Status "Down" }}down status-down{{ end }}{{ end }}" id="service-card-{{$i}}">
                 <div class="service-header">
                     <h3>
@@ -450,7 +450,7 @@
                         <span id="title-{{$i}}">{{ $service.Name }}</span>
                     </h3>
                     <div class="flex gap-1">
-                        <select class="action-select" aria-label="Actions for {{ $service.Name }}" onchange="handleAction(this, '{{ $i }}', '{{ $service.Name }}')">
+                        <select class="action-select" onchange="handleAction(this, '{{ $i }}', '{{ $service.Name }}')">
                             <option value="" selected>Actions...</option>
                             <option value="force_restart">Force Restart</option>
                             <option value="{{ if $service.Paused }}resume_monitoring{{ else }}pause_monitoring{{ end }}" id="pause-opt-{{$i}}">
@@ -482,7 +482,7 @@
                             {{ end }}
                         {{ end }}
                     </div>
-                    
+
                     <!-- Sparkline History -->
                     <div class="sparkline-container" id="sparkline-{{$i}}" title="Last 30 health checks">
                         <!-- Populated via JS -->
@@ -492,42 +492,42 @@
                 <form id="service-form-{{ $i }}" method="post" action="/update_service/{{ $i }}" onsubmit="handleFormAjax(event, 'Updating Service...')">
                     <div id="form-{{ $i }}" class="service-form">
                         <div class="form-group">
-                            <label for="name-{{ $i }}">Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
-                            <input type="text" id="name-{{ $i }}" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
+                            <label>Service Name <span class="tooltip-icon" data-tooltip="Unique identifier for the dashboard">?</span></label>
+                            <input type="text" name="name" value="{{ $service.Name }}" required pattern="^[a-zA-Z0-9_\-]+$" title="Alphanumeric, dashes, and underscores only" oninput="this.setCustomValidity('')">
                         </div>
                         <div class="form-group">
-                            <label for="website_url-{{ $i }}">URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
-                            <input type="url" id="website_url-{{ $i }}" name="website_url" value="{{ $service.WebsiteURL }}" required>
+                            <label>URL to Monitor <span class="tooltip-icon" data-tooltip="The full HTTP/HTTPS URL to ping">?</span></label>
+                            <input type="url" name="website_url" value="{{ $service.WebsiteURL }}" required>
                         </div>
                         <div class="form-group full-width">
-                            <label for="container_names-{{ $i }}">Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
-                            <input type="text" id="container_names-{{ $i }}" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
+                            <label>Container Names <span class="tooltip-icon" data-tooltip="Comma-separated list of strict docker container names to restart">?</span></label>
+                            <input type="text" name="container_names" value="{{ $service.ContainerNames }}" required pattern="^[a-zA-Z0-9_.\-]+(,[a-zA-Z0-9_.\-]+)*$" title="Comma separated valid container names without spaces">
                         </div>
                         <div class="form-group">
-                            <label for="retries-{{ $i }}">Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
-                            <input type="number" id="retries-{{ $i }}" name="retries" value="{{ $service.Retries }}" required min="1">
+                            <label>Retries <span class="tooltip-icon" data-tooltip="Failures allowed before restarting">?</span></label>
+                            <input type="number" name="retries" value="{{ $service.Retries }}" required min="1">
                         </div>
                         <div class="form-group">
-                            <label for="interval-{{ $i }}">Interval (sec) <span class="tooltip-icon" data-tooltip="Seconds between pings">?</span></label>
-                            <input type="number" id="interval-{{ $i }}" name="interval" value="{{ $service.Interval }}" required min="1">
+                            <label>Interval (sec) <span class="tooltip-icon" data-tooltip="Seconds between pings">?</span></label>
+                            <input type="number" name="interval" value="{{ $service.Interval }}" required min="1">
                         </div>
                         <div class="form-group">
-                            <label for="grace_period-{{ $i }}">Grace Period (sec) <span class="tooltip-icon" data-tooltip="Delay after a restart before restarts are allowed again">?</span></label>
-                            <input type="number" id="grace_period-{{ $i }}" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
+                            <label>Grace Period (sec) <span class="tooltip-icon" data-tooltip="Delay after a restart before restarts are allowed again">?</span></label>
+                            <input type="number" name="grace_period" value="{{ $service.GracePeriod }}" required min="1">
                         </div>
                         <div class="form-group full-width">
-                            <label for="codes_{{ $i }}">Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
+                            <label>Accepted Status Codes <span class="tooltip-icon" data-tooltip="Comma separated successful HTTP codes">?</span></label>
                             <input type="text" id="codes_{{ $i }}" name="accepted_status_codes" placeholder="200, 201">
                         </div>
                         <div class="form-group full-width" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="insecure_{{ $i }}" name="insecure_skip_verify" style="width: auto; margin:0;" {{ if $service.InsecureSkipVerify }}checked{{ end }}>
                             <label for="insecure_{{ $i }}" style="margin:0;">Allow Insecure TLS (Self-Signed Certificates) <span class="tooltip-icon" data-tooltip="Skips verifying the TLS certificate chain when pinging the website URL. Useful for internal or self-signed domains.">?</span></label>
                         </div>
-                        
+
                         <p class="full-width" style="color: var(--text-muted); font-size: 0.85rem">
                             Time to Restart on Failure: <span id="ttr-{{$i}}">{{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</span>
                         </p>
-                        
+
                         <button type="submit" name="form_action" value="update" class="btn full-width">
                             <span>Update Service</span><div class="spinner"></div>
                         </button>
@@ -536,13 +536,13 @@
                     </div>
                 </form>
             </div>
-            
+
             <script>
                 // Seed initial array values
                 document.getElementById('codes_{{ $i }}').value = "{{ range $idx, $code := $service.AcceptedStatusCodes }}{{ if $idx }}, {{ end }}{{ $code }}{{ end }}";
             </script>
             {{ end }}
-            
+
             {{ if eq (len .Services) 0 }}
             <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted);">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity: 0.5; margin-bottom: 1rem;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -564,8 +564,8 @@
             <h2>Confirm Deletion</h2>
             <p>Are you sure you want to delete <strong id="delete-target-name"></strong>?</p>
             <p style="font-size:0.9rem; color: var(--danger);">This action cannot be undone. Please type the exact service name to confirm:</p>
-            <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()" aria-label="Confirm exact service name to delete">
-            
+            <input type="text" id="delete-confirm-input" placeholder="Service Name" autocomplete="off" oninput="validateDelete()">
+
             <form id="delete-form" method="post" action="" onsubmit="handleFormAjax(event, 'Deleting Service...')">
                 <input type="hidden" name="form_action" value="delete">
                 <div class="modal-buttons">
@@ -624,8 +624,8 @@
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            
-            const icon = type === 'success' ? 
+
+            const icon = type === 'success' ?
                 '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' :
                 '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
 
@@ -653,7 +653,7 @@
             const btn = form.querySelector('button[type="submit"]');
             const btnSpan = btn.querySelector('span');
             const originalText = btnSpan ? btnSpan.textContent : btn.textContent;
-            
+
             // UI Loading state
             btn.classList.add('loading');
             if (btnSpan) btnSpan.textContent = loadingText;
@@ -751,9 +751,9 @@
             document.getElementById('logs-modal').style.display = 'flex';
 
             if (currentEventSource) currentEventSource.close();
-            
+
             currentEventSource = new EventSource(`/api/logs/stream/${index}`);
-            
+
             currentEventSource.onopen = () => {
                 statusIndicator.textContent = "● Streaming Live";
                 statusIndicator.style.color = "var(--success)";
@@ -803,11 +803,11 @@
 
         function updateDashboardUI(data) {
             let online = 0; let offline = 0;
-            
+
             data.services.forEach((svc, i) => {
                 if (i >= data.status.services.length) return;
                 const status = data.status.services[i];
-                
+
                 // Metrics
                 if (!svc.paused) {
                     if (status.status === 'Up') online++;
@@ -891,7 +891,7 @@
 
         // Initial Data render on load (the template injects the state on first load, but we want proper sparklines)
         document.addEventListener("DOMContentLoaded", () => {
-            fetchStatus(); 
+            fetchStatus();
             // Start routine polling every 5s
             setInterval(fetchStatus, 5000);
         });
