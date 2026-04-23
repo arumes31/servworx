@@ -79,6 +79,37 @@ func formatDuration(seconds int64) string {
 	return strings.Join(parts, ", ")
 }
 
+// enrichServiceStatus populates duration strings and history for a service status
+func enrichServiceStatus(s *config.ServiceStatus, svc config.ServiceConfig, currentTime int64) APIServiceStatus {
+	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+
+	if s.DownSince != nil {
+		t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
+		if err == nil {
+			df := formatDuration(currentTime - t.Unix())
+			s.DownFor = &df
+		} else {
+			errStr := "Invalid timestamp"
+			s.DownFor = &errStr
+		}
+	}
+	if s.UpSince != nil {
+		t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
+		if err == nil {
+			uf := formatDuration(currentTime - t.Unix())
+			s.UpFor = &uf
+		} else {
+			errStr := "Invalid timestamp"
+			s.UpFor = &errStr
+		}
+	}
+
+	return APIServiceStatus{
+		ServiceStatus: *s,
+		History:       monitor.GetHistory(svc.Name),
+	}
+}
+
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +277,23 @@ type ConfigViewData struct {
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
 
+// APIServiceStatus extends config.ServiceStatus with history for API responses
+type APIServiceStatus struct {
+	config.ServiceStatus
+	History []string `json:"history"`
+}
+
+// APIStatusResponse represents the structured status response for the API
+type APIStatusResponse struct {
+	Services []APIServiceStatus `json:"services"`
+}
+
+// APIViewData is the top-level structure for the API status response
+type APIViewData struct {
+	Services []config.ServiceConfig `json:"services"`
+	Status   APIStatusResponse      `json:"status"`
+}
+
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	monitor.LogAction(username, "Accessed configuration page", "user")
@@ -258,28 +306,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			_ = enrichServiceStatus(&status.Services[i], svc, currentTime)
 		}
 	}
 
@@ -611,57 +638,12 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	
 	currentTime := time.Now().Unix()
 
+	apiStatus := APIStatusResponse{}
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			enriched := enrichServiceStatus(&status.Services[i], svc, currentTime)
+			apiStatus.Services = append(apiStatus.Services, enriched)
 		}
-	}
-
-	// Enrich status with in-memory history for API response
-	type APIServiceStatus struct {
-		config.ServiceStatus
-		History []string `json:"history"`
-	}
-	type APIStatusResponse struct {
-		Services []APIServiceStatus `json:"services"`
-	}
-
-	apiStatus := APIStatusResponse{}
-	for i, s := range status.Services {
-		history := []string{}
-		if i < len(cfg.Services) {
-			history = monitor.GetHistory(cfg.Services[i].Name)
-		}
-		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
-			ServiceStatus: s,
-			History:       history,
-		})
-	}
-
-	type APIViewData struct {
-		Services []config.ServiceConfig `json:"services"`
-		Status   APIStatusResponse      `json:"status"`
 	}
 
 	w.Header().Set("Content-Type", "application/json")

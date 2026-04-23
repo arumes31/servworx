@@ -2,6 +2,10 @@ package handlers
 
 import (
 	"testing"
+	"time"
+
+	"github.com/arumes31/servworx/internal/config"
+	"github.com/arumes31/servworx/internal/monitor"
 )
 
 func TestFormatDuration(t *testing.T) {
@@ -79,5 +83,63 @@ func TestCheckPassword(t *testing.T) {
 				t.Errorf("checkPassword(%s, %s) = %v, want %v", tt.password, tt.storedHash, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEnrichServiceStatus(t *testing.T) {
+	currentTime := time.Now().Unix()
+	downTime := time.Unix(currentTime-3600, 0).Format("2006-01-02 15:04:05")
+	upTime := time.Unix(currentTime-7200, 0).Format("2006-01-02 15:04:05")
+
+	svc := config.ServiceConfig{
+		Name:    "TestService",
+		Retries: 3,
+		Interval: 60,
+	}
+
+	status := config.ServiceStatus{
+		Name:      "TestService",
+		DownSince: &downTime,
+		UpSince:   &upTime,
+	}
+
+	// Mock history
+	monitor.PushHistory("TestService", "Up")
+	monitor.PushHistory("TestService", "Down")
+
+	enriched := enrichServiceStatus(&status, svc, currentTime)
+
+	if *status.DownFor != "1 hour" {
+		t.Errorf("expected DownFor to be '1 hour', got %v", *status.DownFor)
+	}
+	if *status.UpFor != "2 hours" {
+		t.Errorf("expected UpFor to be '2 hours', got %v", *status.UpFor)
+	}
+	if status.TimeToRestart != "3 minutes" {
+		t.Errorf("expected TimeToRestart to be '3 minutes', got %v", status.TimeToRestart)
+	}
+
+	if len(enriched.History) != 2 {
+		t.Errorf("expected history length 2, got %d", len(enriched.History))
+	}
+	if enriched.History[0] != "Up" || enriched.History[1] != "Down" {
+		t.Errorf("unexpected history content: %v", enriched.History)
+	}
+}
+
+func TestEnrichServiceStatusInvalidTimestamp(t *testing.T) {
+	currentTime := time.Now().Unix()
+	invalidTime := "invalid-timestamp"
+
+	svc := config.ServiceConfig{Name: "TestService"}
+	status := config.ServiceStatus{
+		Name:      "TestService",
+		DownSince: &invalidTime,
+	}
+
+	_ = enrichServiceStatus(&status, svc, currentTime)
+
+	if *status.DownFor != "Invalid timestamp" {
+		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
 	}
 }
