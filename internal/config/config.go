@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 )
 
@@ -15,7 +16,15 @@ var (
 
 	configMutex sync.RWMutex
 	statusMutex sync.RWMutex
+
+	// ContainerNameRegex defines valid characters for a Docker container name.
+	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 )
+
+// IsValidContainerName checks if a string is a valid Docker container name.
+func IsValidContainerName(name string) bool {
+	return ContainerNameRegex.MatchString(name)
+}
 
 // SetConfigDir allows overriding the config directory for local testing
 func SetConfigDir(dir string) {
