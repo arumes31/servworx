@@ -480,7 +480,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 
 	svc := cfg.Services[idx]
 	var validContainerName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	
+
 	// run in background to not block HTTP request
 	go func(names, name string, user string) {
 		containers := strings.Split(names, ",")
@@ -502,7 +502,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 			}
 		}
-		
+
 		if restartSucceeded {
 			nowStr := time.Now().Format("2006-01-02 15:04:05")
 			_ = config.UpdateStatus(func(s *config.Status) {
@@ -546,7 +546,7 @@ func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 		action = "paused"
 	}
 	monitor.LogAction(username, fmt.Sprintf("Monitoring %s for service: %s", action, name), "user")
-	
+
 	monitor.RestartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
@@ -587,7 +587,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
-	
+
 	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
@@ -629,13 +629,13 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	monitor.LogAction("System", fmt.Sprintf("Initialized status for new service: %s", newName), "system")
 
 	monitor.RestartMonitoring()
-	
+
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
 		return
 	}
-	
+
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
@@ -643,7 +643,7 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
-	
+
 	currentTime := time.Now().Unix()
 
 	for i, svc := range cfg.Services {
@@ -704,7 +704,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		Services: cfg.Services,
 		Status:   apiStatus,
 	}
-	
+
 	jsonBytes, err := json.Marshal(data)
 	if err == nil {
 		_, _ = w.Write(jsonBytes)
@@ -762,7 +762,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
-	
+
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {

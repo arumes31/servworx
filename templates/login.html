@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,11 +16,21 @@
             align-items: center;
             animation: subtleGradient 10s ease-in-out infinite;
         }
+
         @keyframes subtleGradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
+
         .container {
             background: #ffffff;
             padding: 2rem;
@@ -29,21 +40,26 @@
             max-width: 400px;
             text-align: center;
         }
+
         h1 {
             color: #6b21a8;
             margin-bottom: 1.5rem;
         }
+
         .error {
             color: #dc2626;
             margin-bottom: 1rem;
             font-size: 0.9rem;
         }
+
         form {
             display: flex;
             flex-direction: column;
             gap: 1rem;
         }
-        input[type="text"], input[type="password"] {
+
+        input[type="text"],
+        input[type="password"] {
             padding: 0.75rem;
             border: 1px solid #d8b4fe;
             border-radius: 4px;
@@ -51,9 +67,12 @@
             outline: none;
             transition: border-color 0.3s;
         }
-        input[type="text"]:focus, input[type="password"]:focus {
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
             border-color: #6b21a8;
         }
+
         input[type="submit"] {
             background: #6b21a8;
             color: #ffffff;
@@ -64,9 +83,11 @@
             font-size: 1rem;
             transition: background 0.3s;
         }
+
         input[type="submit"]:hover {
             background: #a855f7;
         }
+
         .footer {
             margin-top: 1.5rem;
             color: #6b21a8;
@@ -74,11 +95,12 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Login to Servworx</h1>
         {{ if .error }}
-            <div class="error">{{ .error }}</div>
+        <div class="error">{{ .error }}</div>
         {{ end }}
         <form method="POST" action="/login">
             <label for="username">Username:</label>
@@ -90,4 +112,5 @@
         <div class="footer">Powered by Servworx - Monitor Your Services with Ease</div>
     </div>
 </body>
+
 </html>
