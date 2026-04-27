@@ -42,8 +42,6 @@ func checkPassword(password, storedHash string) bool {
 	}
 
 	// Legacy SHA256 hex hash (64 character hex string)
-	// We intentionally accept legacy SHA256 for backward compatibility.
-	// Users are immediately migrated to bcrypt via migratePasswordToBcrypt upon successful login.
 	if len(storedHash) == 64 {
 		sum := sha256.Sum256([]byte(password))
 		return hex.EncodeToString(sum[:]) == storedHash
@@ -99,6 +97,7 @@ func formatDuration(seconds int64) string {
 		}
 		parts = append(parts, fmt.Sprintf("%d minute%s", minutes, s))
 	}
+
 	if seconds > 0 || len(parts) == 0 {
 		s := ""
 		if seconds != 1 {
@@ -108,6 +107,7 @@ func formatDuration(seconds int64) string {
 	}
 	return strings.Join(parts, ", ")
 }
+
 
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -169,7 +169,11 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/config", http.StatusSeeOther)
 		return
 	}
-	_ = templates.ExecuteTemplate(w, "login.html", nil)
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+		"IsSecure": isSecure,
+	})
 }
 
 func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +182,16 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	if !isSecure {
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+			"error":    "Login is only possible over a secure (HTTPS) connection.",
+			"IsSecure": false,
+		})
+		return
+	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
@@ -280,6 +294,7 @@ type ConfigViewData struct {
 	Logs     string                 `json:"logs,omitempty"`
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
+
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
@@ -753,6 +768,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
+
 
 	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)

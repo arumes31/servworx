@@ -124,6 +124,11 @@ func restartContainers(containerNames, serviceName string) int64 {
 		if c == "" {
 			continue
 		}
+		if !config.IsValidContainerName(c) {
+			fmt.Printf("Invalid container name blocked from restart: %s\n", c)
+			LogAction("System", fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
+			continue
+		}
 		fmt.Printf("Executing 'docker restart %s'\n", c)
 		
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

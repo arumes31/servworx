@@ -93,6 +93,34 @@
             color: #6b21a8;
             font-size: 0.8rem;
         }
+        .warning-box {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .warning-box h2 {
+            color: #92400e;
+            font-size: 1.1rem;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .warning-box p {
+            color: #b45309;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+        .warning-box p:last-child {
+            margin-bottom: 0;
+        }
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -102,15 +130,48 @@
         {{ if .error }}
         <div class="error">{{ .error }}</div>
         {{ end }}
-        <form method="POST" action="/login">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-            <input type="submit" value="Login">
-        </form>
+        {{ if .IsSecure }}
+            <form method="POST" action="/login" id="login-form">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+                <input type="submit" value="Login">
+            </form>
+        {{ else }}
+            <div class="warning-box" id="http-warning">
+                <h2>⚠️ Security Warning</h2>
+                <p>You are accessing Servworx over an insecure (HTTP) connection. Login is disabled to protect your credentials and session data.</p>
+                <p style="margin-top: 1rem;">Please use <strong>HTTPS</strong> to access the login page.</p>
+            </div>
+        {{ end }}
         <div class="footer">Powered by Servworx - Monitor Your Services with Ease</div>
     </div>
+    <script>
+        // Client-side fallback check
+        // We allow localhost/127.0.0.1 for development as they are often treated as secure contexts
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isInsecure = window.location.protocol === 'http:' && !isLocalhost;
+
+        if (isInsecure) {
+            const form = document.getElementById('login-form');
+            if (form) {
+                form.classList.add('hidden');
+                
+                if (!document.getElementById('http-warning')) {
+                    const warning = document.createElement('div');
+                    warning.className = 'warning-box';
+                    warning.id = 'http-warning';
+                    warning.innerHTML = `
+                        <h2>⚠️ Security Warning</h2>
+                        <p>You are accessing Servworx over an insecure (HTTP) connection. Login is disabled to protect your credentials and session data.</p>
+                        <p style="margin-top: 1rem;">Please use <strong>HTTPS</strong> to access the login page.</p>
+                    `;
+                    form.parentNode.insertBefore(warning, form);
+                }
+            }
+        }
+    </script>
 </body>
 
 </html>
