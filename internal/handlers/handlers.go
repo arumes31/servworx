@@ -311,7 +311,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 			s := &status.Services[i]
 			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
 			if s.DownSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
 				if err == nil {
 					df := formatDuration(currentTime - t.Unix())
 					s.DownFor = &df
@@ -321,7 +321,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if s.UpSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
 				if err == nil {
 					uf := formatDuration(currentTime - t.Unix())
 					s.UpFor = &uf
@@ -654,6 +654,23 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
+// APIServiceStatus extends config.ServiceStatus with history for API responses
+type APIServiceStatus struct {
+	config.ServiceStatus
+	History []string `json:"history"`
+}
+
+// APIStatusResponse represents the structured status response for the API
+type APIStatusResponse struct {
+	Services []APIServiceStatus `json:"services"`
+}
+
+// APIViewData is the top-level structure for the API status response
+type APIViewData struct {
+	Services []config.ServiceConfig `json:"services"`
+	Status   APIStatusResponse      `json:"status"`
+}
+
 // JSON Endpoint for Status Fetching
 func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.LoadConfig()
@@ -666,7 +683,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 			s := &status.Services[i]
 			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
 			if s.DownSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
 				if err == nil {
 					df := formatDuration(currentTime - t.Unix())
 					s.DownFor = &df
@@ -676,7 +693,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if s.UpSince != nil {
-				t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
 				if err == nil {
 					uf := formatDuration(currentTime - t.Unix())
 					s.UpFor = &uf
@@ -688,14 +705,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Enrich status with in-memory history for API response
-	type APIServiceStatus struct {
-		config.ServiceStatus
-		History []string `json:"history"`
-	}
-	type APIStatusResponse struct {
-		Services []APIServiceStatus `json:"services"`
-	}
 
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
@@ -709,10 +718,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	type APIViewData struct {
-		Services []config.ServiceConfig `json:"services"`
-		Status   APIStatusResponse      `json:"status"`
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	data := APIViewData{
