@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +33,7 @@ func hashPassword(password string) (string, error) {
 }
 
 // checkPassword verifies a password against a stored hash.
-// It supports bcrypt (Go) format.
+// It supports both bcrypt (Go) and SHA256 hex (legacy PHP) formats.
 // Returns true if the password matches.
 func checkPassword(password, storedHash string) bool {
 	// Bcrypt hashes always start with "$2a$", "$2b$", or "$2y$"
@@ -38,7 +41,26 @@ func checkPassword(password, storedHash string) bool {
 		return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)) == nil
 	}
 
+	// Legacy SHA256 hex hash (64 character hex string)
+	if len(storedHash) == 64 {
+		sum := sha256.Sum256([]byte(password))
+		return hex.EncodeToString(sum[:]) == storedHash
+	}
+
 	return false
+}
+
+// migratePasswordToBcrypt re-hashes a legacy password with bcrypt and saves it.
+func migratePasswordToBcrypt(username, password string) {
+	newHash, err := hashPassword(password)
+	if err != nil {
+		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
+		return
+	}
+	_ = config.UpdateConfig(func(cfg *config.Config) {
+		cfg.Users[username] = newHash
+	})
+	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
 }
 
 // formatDuration matches Python's format_duration output closely
@@ -54,19 +76,27 @@ func formatDuration(seconds int64) string {
 	seconds %= 60
 
 	var parts []string
-	appendPart := func(value int64, unit string) {
-		if value > 0 {
-			s := ""
-			if value != 1 {
-				s = "s"
-			}
-			parts = append(parts, fmt.Sprintf("%d %s%s", value, unit, s))
+	if days > 0 {
+		s := ""
+		if days != 1 {
+			s = "s"
 		}
+		parts = append(parts, fmt.Sprintf("%d day%s", days, s))
 	}
-
-	appendPart(days, "day")
-	appendPart(hours, "hour")
-	appendPart(minutes, "minute")
+	if hours > 0 {
+		s := ""
+		if hours != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d hour%s", hours, s))
+	}
+	if minutes > 0 {
+		s := ""
+		if minutes != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d minute%s", minutes, s))
+	}
 
 	if seconds > 0 || len(parts) == 0 {
 		s := ""
@@ -78,36 +108,6 @@ func formatDuration(seconds int64) string {
 	return strings.Join(parts, ", ")
 }
 
-// enrichServiceStatus populates duration strings and history for a service status
-func enrichServiceStatus(s *config.ServiceStatus, svc config.ServiceConfig, currentTime int64) APIServiceStatus {
-	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-
-	if s.DownSince != nil {
-		t, err := time.Parse("2006-01-02 15:04:05", *s.DownSince)
-		if err == nil {
-			df := formatDuration(currentTime - t.Unix())
-			s.DownFor = &df
-		} else {
-			errStr := "Invalid timestamp"
-			s.DownFor = &errStr
-		}
-	}
-	if s.UpSince != nil {
-		t, err := time.Parse("2006-01-02 15:04:05", *s.UpSince)
-		if err == nil {
-			uf := formatDuration(currentTime - t.Unix())
-			s.UpFor = &uf
-		} else {
-			errStr := "Invalid timestamp"
-			s.UpFor = &errStr
-		}
-	}
-
-	return APIServiceStatus{
-		ServiceStatus: *s,
-		History:       monitor.GetHistory(svc.Name),
-	}
-}
 
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -169,7 +169,11 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/config", http.StatusSeeOther)
 		return
 	}
-	_ = templates.ExecuteTemplate(w, "login.html", nil)
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+		"IsSecure": isSecure,
+	})
 }
 
 func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +182,16 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	if !isSecure {
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+			"error":    "Login is only possible over a secure (HTTPS) connection.",
+			"IsSecure": false,
+		})
+		return
+	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
@@ -198,6 +212,11 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
+	}
+
+	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
+	if !strings.HasPrefix(storedHash, "$2") {
+		migratePasswordToBcrypt(username, password)
 	}
 
 	// Login successful
@@ -276,22 +295,6 @@ type ConfigViewData struct {
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
 
-// APIServiceStatus extends config.ServiceStatus with history for API responses
-type APIServiceStatus struct {
-	config.ServiceStatus
-	History []string `json:"history"`
-}
-
-// APIStatusResponse represents the structured status response for the API
-type APIStatusResponse struct {
-	Services []APIServiceStatus `json:"services"`
-}
-
-// APIViewData is the top-level structure for the API status response
-type APIViewData struct {
-	Services []config.ServiceConfig `json:"services"`
-	Status   APIStatusResponse      `json:"status"`
-}
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
@@ -305,7 +308,28 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			_ = enrichServiceStatus(&status.Services[i], svc, currentTime)
+			s := &status.Services[i]
+			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+			if s.DownSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+				if err == nil {
+					df := formatDuration(currentTime - t.Unix())
+					s.DownFor = &df
+				} else {
+					errStr := "Invalid timestamp"
+					s.DownFor = &errStr
+				}
+			}
+			if s.UpSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+				if err == nil {
+					uf := formatDuration(currentTime - t.Unix())
+					s.UpFor = &uf
+				} else {
+					errStr := "Invalid timestamp"
+					s.UpFor = &errStr
+				}
+			}
 		}
 	}
 
@@ -470,7 +494,8 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc := cfg.Services[idx]
-	
+	var validContainerName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
 	// run in background to not block HTTP request
 	go func(names, name string, user string) {
 		containers := strings.Split(names, ",")
@@ -480,7 +505,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 			if c == "" {
 				continue
 			}
-			if !config.IsValidContainerName(c) {
+			if !validContainerName.MatchString(c) {
 				monitor.LogAction(user, fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
 				restartSucceeded = false
 				continue
@@ -492,7 +517,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 			}
 		}
-		
+
 		if restartSucceeded {
 			nowStr := time.Now().Format("2006-01-02 15:04:05")
 			_ = config.UpdateStatus(func(s *config.Status) {
@@ -536,7 +561,7 @@ func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 		action = "paused"
 	}
 	monitor.LogAction(username, fmt.Sprintf("Monitoring %s for service: %s", action, name), "user")
-	
+
 	monitor.RestartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
@@ -562,11 +587,6 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
 		if c != "" {
-			if !config.IsValidContainerName(c) {
-				fmt.Fprintf(&logsBuilder, "Invalid container name blocked from logs: %s\n\n", c)
-				monitor.LogAction(username, fmt.Sprintf("Invalid container name blocked from logs: %s", c), "error")
-				continue
-			}
 			// #nosec G204
 			cmd := exec.Command("docker", "logs", "--tail", "10", c)
 			out, _ := cmd.CombinedOutput()
@@ -582,7 +602,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
-	
+
 	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
@@ -624,37 +644,87 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	monitor.LogAction("System", fmt.Sprintf("Initialized status for new service: %s", newName), "system")
 
 	monitor.RestartMonitoring()
-	
+
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
 		return
 	}
-	
+
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+// APIServiceStatus extends config.ServiceStatus with history for API responses
+type APIServiceStatus struct {
+	config.ServiceStatus
+	History []string `json:"history"`
+}
+
+// APIStatusResponse represents the structured status response for the API
+type APIStatusResponse struct {
+	Services []APIServiceStatus `json:"services"`
+}
+
+// APIViewData is the top-level structure for the API status response
+type APIViewData struct {
+	Services []config.ServiceConfig `json:"services"`
+	Status   APIStatusResponse      `json:"status"`
 }
 
 // JSON Endpoint for Status Fetching
 func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
-	
+
 	currentTime := time.Now().Unix()
 
-	apiStatus := APIStatusResponse{}
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			enriched := enrichServiceStatus(&status.Services[i], svc, currentTime)
-			apiStatus.Services = append(apiStatus.Services, enriched)
+			s := &status.Services[i]
+			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+			if s.DownSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+				if err == nil {
+					df := formatDuration(currentTime - t.Unix())
+					s.DownFor = &df
+				} else {
+					errStr := "Invalid timestamp"
+					s.DownFor = &errStr
+				}
+			}
+			if s.UpSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+				if err == nil {
+					uf := formatDuration(currentTime - t.Unix())
+					s.UpFor = &uf
+				} else {
+					errStr := "Invalid timestamp"
+					s.UpFor = &errStr
+				}
+			}
 		}
 	}
+
+
+	apiStatus := APIStatusResponse{}
+	for i, s := range status.Services {
+		history := []string{}
+		if i < len(cfg.Services) {
+			history = monitor.GetHistory(cfg.Services[i].Name)
+		}
+		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
+			ServiceStatus: s,
+			History:       history,
+		})
+	}
+
 
 	w.Header().Set("Content-Type", "application/json")
 	data := APIViewData{
 		Services: cfg.Services,
 		Status:   apiStatus,
 	}
-	
+
 	jsonBytes, err := json.Marshal(data)
 	if err == nil {
 		_, _ = w.Write(jsonBytes)
@@ -704,12 +774,6 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !config.IsValidContainerName(targetContainer) {
-		fmt.Fprintf(w, "data: Invalid container name blocked from log stream: %s\n\n", targetContainer)
-		flusher.Flush()
-		monitor.LogAction("System", fmt.Sprintf("Invalid container name blocked from log stream: %s", targetContainer), "error")
-		return
-	}
 
 	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
@@ -719,7 +783,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
-	
+
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {
