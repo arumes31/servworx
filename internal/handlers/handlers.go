@@ -169,7 +169,11 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/config", http.StatusSeeOther)
 		return
 	}
-	_ = templates.ExecuteTemplate(w, "login.html", nil)
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+		"IsSecure": isSecure,
+	})
 }
 
 func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +182,16 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	if !isSecure {
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+			"error":    "Login is only possible over a secure (HTTPS) connection.",
+			"IsSecure": false,
+		})
+		return
+	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
