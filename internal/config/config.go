@@ -14,11 +14,13 @@ var (
 	ConfigFile = "config.json"
 	StatusFile = "status.json"
 
-	configMutex sync.RWMutex
-	statusMutex sync.RWMutex
+	configMutex  sync.RWMutex
+	statusMutex  sync.RWMutex
+	cachedConfig *Config
+	cachedStatus *Status
 
 	// ContainerNameRegex defines valid characters for a Docker container name.
-	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	ContainerNameRegex = regexp.MustCompile("^[A-Za-z0-9_.-]+$")
 )
 
 // IsValidContainerName checks if a string is a valid Docker container name.
@@ -48,6 +50,32 @@ type ServiceConfig struct {
 	InsecureSkipVerify  bool   `json:"insecure_skip_verify"`
 }
 
+func (s *ServiceConfig) DeepCopy() ServiceConfig {
+	cp := *s
+	if s.AcceptedStatusCodes != nil {
+		cp.AcceptedStatusCodes = make([]int, len(s.AcceptedStatusCodes))
+		copy(cp.AcceptedStatusCodes, s.AcceptedStatusCodes)
+	}
+	return cp
+}
+
+func (c *Config) DeepCopy() *Config {
+	if c == nil {
+		return nil
+	}
+	cp := &Config{
+		Users:    make(map[string]string),
+		Services: make([]ServiceConfig, len(c.Services)),
+	}
+	for k, v := range c.Users {
+		cp.Users[k] = v
+	}
+	for i := range c.Services {
+		cp.Services[i] = c.Services[i].DeepCopy()
+	}
+	return cp
+}
+
 type Status struct {
 	Services []ServiceStatus `json:"services"`
 }
@@ -64,10 +92,60 @@ type ServiceStatus struct {
 	TimeToRestart    string  `json:"time_to_restart,omitempty"` // populated for the UI
 }
 
+func (s *ServiceStatus) DeepCopy() ServiceStatus {
+	cp := *s
+	if s.LastFailure != nil {
+		v := *s.LastFailure
+		cp.LastFailure = &v
+	}
+	if s.DownSince != nil {
+		v := *s.DownSince
+		cp.DownSince = &v
+	}
+	if s.UpSince != nil {
+		v := *s.UpSince
+		cp.UpSince = &v
+	}
+	if s.DownFor != nil {
+		v := *s.DownFor
+		cp.DownFor = &v
+	}
+	if s.UpFor != nil {
+		v := *s.UpFor
+		cp.UpFor = &v
+	}
+	return cp
+}
+
+func (s *Status) DeepCopy() *Status {
+	if s == nil {
+		return nil
+	}
+	cp := &Status{
+		Services: make([]ServiceStatus, len(s.Services)),
+	}
+	for i := range s.Services {
+		cp.Services[i] = s.Services[i].DeepCopy()
+	}
+	return cp
+}
+
 // LoadConfig reads the configuration file. It creates one with defaults if it doesn't exist.
 func LoadConfig() (*Config, error) {
 	configMutex.RLock()
-	defer configMutex.RUnlock()
+	if cachedConfig != nil {
+		defer configMutex.RUnlock()
+		return cachedConfig.DeepCopy(), nil
+	}
+	configMutex.RUnlock()
+
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	// Double check
+	if cachedConfig != nil {
+		return cachedConfig.DeepCopy(), nil
+	}
 
 	path := filepath.Join(ConfigDir, ConfigFile)
 	// #nosec G304
@@ -91,7 +169,23 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	return &cfg, nil
+	cachedConfig = &cfg
+	return cachedConfig.DeepCopy(), nil
+}
+
+// GetServiceConfig returns a deep copy of a specific service's configuration.
+func GetServiceConfig(name string) (*ServiceConfig, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range cfg.Services {
+		if s.Name == name {
+			cp := s.DeepCopy()
+			return &cp, nil
+		}
+	}
+	return nil, fmt.Errorf("service not found: %s", name)
 }
 
 // SaveConfig writes the configuration file in a thread-safe manner.
@@ -109,13 +203,30 @@ func SaveConfig(cfg *Config) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+
+	cachedConfig = cfg.DeepCopy()
+	return nil
 }
 
 // LoadStatus reads the status file.
 func LoadStatus() (*Status, error) {
 	statusMutex.RLock()
-	defer statusMutex.RUnlock()
+	if cachedStatus != nil {
+		defer statusMutex.RUnlock()
+		return cachedStatus.DeepCopy(), nil
+	}
+	statusMutex.RUnlock()
+
+	statusMutex.Lock()
+	defer statusMutex.Unlock()
+
+	// Double check
+	if cachedStatus != nil {
+		return cachedStatus.DeepCopy(), nil
+	}
 
 	path := filepath.Join(ConfigDir, StatusFile)
 	// #nosec G304
@@ -132,7 +243,8 @@ func LoadStatus() (*Status, error) {
 		return nil, fmt.Errorf("failed to parse status json: %v", err)
 	}
 
-	return &status, nil
+	cachedStatus = &status
+	return cachedStatus.DeepCopy(), nil
 }
 
 // SaveStatus writes the status file in a thread-safe manner.
@@ -150,7 +262,12 @@ func SaveStatus(status *Status) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+
+	cachedStatus = status.DeepCopy()
+	return nil
 }
 
 // UpdateStatus atomically updates the status using a callback function.
@@ -158,23 +275,28 @@ func UpdateStatus(updateFn func(*Status)) error {
 	statusMutex.Lock()
 	defer statusMutex.Unlock()
 
-	path := filepath.Join(ConfigDir, StatusFile)
-	// #nosec G304
-	data, err := os.ReadFile(path)
 	var status Status
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		status.Services = []ServiceStatus{}
+	if cachedStatus != nil {
+		status = *cachedStatus.DeepCopy()
 	} else {
-		if err := json.Unmarshal(data, &status); err != nil {
-			return err
+		path := filepath.Join(ConfigDir, StatusFile)
+		// #nosec G304
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			status.Services = []ServiceStatus{}
+		} else {
+			if err := json.Unmarshal(data, &status); err != nil {
+				return err
+			}
 		}
 	}
 
 	updateFn(&status)
 
+	path := filepath.Join(ConfigDir, StatusFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
@@ -184,7 +306,12 @@ func UpdateStatus(updateFn func(*Status)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0600)
+	if err := os.WriteFile(path, newData, 0600); err != nil {
+		return err
+	}
+
+	cachedStatus = status.DeepCopy()
+	return nil
 }
 
 // UpdateConfig atomically updates the configuration using a callback function.
@@ -192,24 +319,29 @@ func UpdateConfig(updateFn func(*Config)) error {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 
-	path := filepath.Join(ConfigDir, ConfigFile)
-	// #nosec G304
-	data, err := os.ReadFile(path)
 	var cfg Config
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		cfg.Users = make(map[string]string)
-		cfg.Services = []ServiceConfig{}
+	if cachedConfig != nil {
+		cfg = *cachedConfig.DeepCopy()
 	} else {
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return err
+		path := filepath.Join(ConfigDir, ConfigFile)
+		// #nosec G304
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			cfg.Users = make(map[string]string)
+			cfg.Services = []ServiceConfig{}
+		} else {
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				return err
+			}
 		}
 	}
 
 	updateFn(&cfg)
 
+	path := filepath.Join(ConfigDir, ConfigFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
@@ -219,5 +351,10 @@ func UpdateConfig(updateFn func(*Config)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0600)
+	if err := os.WriteFile(path, newData, 0600); err != nil {
+		return err
+	}
+
+	cachedConfig = cfg.DeepCopy()
+	return nil
 }

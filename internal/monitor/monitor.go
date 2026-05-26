@@ -189,19 +189,9 @@ func monitorService(svc config.ServiceConfig) {
 
 	for {
 		// Read latest config for this service in case it changed (like paused)
-		var currentSvc *config.ServiceConfig
-		cfg, err := config.LoadConfig()
-		if err == nil {
-			for _, s := range cfg.Services {
-				if s.Name == svc.Name {
-					currentSvc = &s
-					break
-				}
-			}
-		}
-
-		if currentSvc == nil {
-			// Service was deleted, exit goroutine
+		currentSvc, err := config.GetServiceConfig(svc.Name)
+		if err != nil {
+			// Service was deleted or error loading config, exit goroutine
 			return
 		}
 
