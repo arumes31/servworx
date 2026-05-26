@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
@@ -103,42 +105,57 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestDestroySession(t *testing.T) {
-	username := "testuser"
-	sessionID := CreateSession(username)
+	t.Run("Valid session", func(t *testing.T) {
+		username := "testuser"
+		sessionID := CreateSession(username)
 
-	req := httptest.NewRequest("POST", "/logout", nil)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
-	w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/logout", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+		w := httptest.NewRecorder()
 
-	DestroySession(w, req)
+		DestroySession(w, req)
 
-	mutex.RLock()
-	_, ok := sessions[sessionID]
-	mutex.RUnlock()
+		mutex.RLock()
+		_, ok := sessions[sessionID]
+		mutex.RUnlock()
 
-	if ok {
-		t.Error("Session still exists in map after DestroySession")
-	}
-
-	resp := w.Result()
-	cookies := resp.Cookies()
-	var found bool
-	for _, c := range cookies {
-		if c.Name == "session_id" {
-			found = true
-			if c.Value != "" {
-				t.Errorf("Expected empty cookie value, got %s", c.Value)
-			}
-			// Expires is set to Unix(0, 0), which means it's definitely in the past.
-			if !c.Expires.Before(time.Now()) {
-				t.Errorf("Expected expired cookie, got expiry %v", c.Expires)
-			}
-			break
+		if ok {
+			t.Error("Session still exists in map after DestroySession")
 		}
-	}
-	if !found {
-		t.Error("Session cookie not cleared in response")
-	}
+
+		resp := w.Result()
+		cookies := resp.Cookies()
+		var found bool
+		for _, c := range cookies {
+			if c.Name == "session_id" {
+				found = true
+				if c.Value != "" {
+					t.Errorf("Expected empty cookie value, got %s", c.Value)
+				}
+				if !c.Expires.Before(time.Now()) {
+					t.Errorf("Expected expired cookie, got expiry %v", c.Expires)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Error("Session cookie not cleared in response")
+		}
+	})
+
+	t.Run("Missing cookie", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/logout", nil)
+		w := httptest.NewRecorder()
+
+		// This should return early without panic or setting cookies
+		DestroySession(w, req)
+
+		resp := w.Result()
+		cookies := resp.Cookies()
+		if len(cookies) > 0 {
+			t.Error("Expected no cookies to be set when missing session cookie")
+		}
+	})
 }
 
 func TestSetSessionCookie(t *testing.T) {
@@ -170,4 +187,39 @@ func TestSetSessionCookie(t *testing.T) {
 	if !found {
 		t.Error("Session cookie not set in response")
 	}
+}
+
+func TestSessionConcurrency(t *testing.T) {
+	const iterations = 100
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				username := fmt.Sprintf("user-%d-%d", id, j)
+				sessionID := CreateSession(username)
+
+				req := httptest.NewRequest("GET", "/", nil)
+				req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+
+				gotUser, ok := GetSession(req)
+				if !ok || gotUser != username {
+					t.Errorf("Concurrency failure: expected %s, got %s (ok: %v)", username, gotUser, ok)
+				}
+
+				if j%2 == 0 {
+					w := httptest.NewRecorder()
+					DestroySession(w, req)
+					_, ok := GetSession(req)
+					if ok {
+						t.Errorf("Concurrency failure: session should be destroyed")
+					}
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
 }
