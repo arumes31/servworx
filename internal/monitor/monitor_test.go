@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -78,5 +80,53 @@ func TestGetHistoryCopy(t *testing.T) {
 	newHistory := GetHistory(serviceName)
 	if newHistory[0] != "Up" {
 		t.Errorf("expected history to remain 'Up', but got '%s'", newHistory[0])
+	}
+}
+
+func TestCheckWebsite(t *testing.T) {
+	// Mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" || r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer server.Close()
+
+	// Test case 1: Success with default client
+	success, message := checkWebsite(server.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success, got failure: %s", message)
+	}
+
+	// Test case 2: Success with insecure client (though mock server is HTTP)
+	success, message = checkWebsite(server.URL, []int{200}, true)
+	if !success {
+		t.Errorf("expected success with insecureSkip=true, got failure: %s", message)
+	}
+
+	// Test case 3: Failure with wrong status code
+	success, message = checkWebsite(server.URL, []int{201}, false)
+	if success {
+		t.Errorf("expected failure for status 201, got success: %s", message)
+	}
+
+	// Test case 4: Fallback from HEAD to GET
+	serverFallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusMethodNotAllowed) // 405
+			return
+		}
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}))
+	defer serverFallback.Close()
+
+	success, message = checkWebsite(serverFallback.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success with fallback to GET, got failure: %s", message)
 	}
 }
