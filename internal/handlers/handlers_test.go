@@ -97,46 +97,36 @@ func TestEnrichStatusLogic(t *testing.T) {
 		Interval: 60,
 	}
 
-	status := config.ServiceStatus{
-		Name:      "TestService",
-		DownSince: &downTime,
-		UpSince:   &upTime,
+	status := config.Status{
+		Services: []config.ServiceStatus{
+			{
+				Name:      "TestService",
+				DownSince: &downTime,
+				UpSince:   &upTime,
+			},
+		},
 	}
 
 	// Mock history
 	monitor.PushHistory("TestService", "Up")
 	monitor.PushHistory("TestService", "Down")
 
-	// Manually perform enrichment logic as done in handlers.go
-	status.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-	if status.DownSince != nil {
-		tm, err := time.ParseInLocation("2006-01-02 15:04:05", *status.DownSince, time.Local)
-		if err == nil {
-			df := formatDuration(currentTime - tm.Unix())
-			status.DownFor = &df
-		}
-	}
-	if status.UpSince != nil {
-		tm, err := time.ParseInLocation("2006-01-02 15:04:05", *status.UpSince, time.Local)
-		if err == nil {
-			uf := formatDuration(currentTime - tm.Unix())
-			status.UpFor = &uf
-		}
-	}
+	// Use helper instead of manual logic
+	enrichServiceStatus([]config.ServiceConfig{svc}, &status)
 
 	enriched := APIServiceStatus{
-		ServiceStatus: status,
+		ServiceStatus: status.Services[0],
 		History:       monitor.GetHistory(svc.Name),
 	}
 
-	if *status.DownFor != "1 hour" {
-		t.Errorf("expected DownFor to be '1 hour', got %v", *status.DownFor)
+	if *enriched.DownFor != "1 hour" {
+		t.Errorf("expected DownFor to be '1 hour', got %v", *enriched.DownFor)
 	}
-	if *status.UpFor != "2 hours" {
-		t.Errorf("expected UpFor to be '2 hours', got %v", *status.UpFor)
+	if *enriched.UpFor != "2 hours" {
+		t.Errorf("expected UpFor to be '2 hours', got %v", *enriched.UpFor)
 	}
-	if status.TimeToRestart != "3 minutes" {
-		t.Errorf("expected TimeToRestart to be '3 minutes', got %v", status.TimeToRestart)
+	if enriched.TimeToRestart != "3 minutes" {
+		t.Errorf("expected TimeToRestart to be '3 minutes', got %v", enriched.TimeToRestart)
 	}
 
 	if len(enriched.History) != 2 {
@@ -150,21 +140,19 @@ func TestEnrichStatusLogic(t *testing.T) {
 func TestEnrichStatusLogicInvalidTimestamp(t *testing.T) {
 	invalidTime := "invalid-timestamp"
 
-	status := config.ServiceStatus{
-		Name:      "TestService",
-		DownSince: &invalidTime,
+	status := config.Status{
+		Services: []config.ServiceStatus{
+			{
+				Name:      "TestService",
+				DownSince: &invalidTime,
+			},
+		},
 	}
 
-	// Manually perform enrichment logic as done in handlers.go
-	if status.DownSince != nil {
-		_, err := time.ParseInLocation("2006-01-02 15:04:05", *status.DownSince, time.Local)
-		if err != nil {
-			errStr := "Invalid timestamp"
-			status.DownFor = &errStr
-		}
-	}
+	// Use helper instead of manual logic
+	enrichServiceStatus([]config.ServiceConfig{{Name: "TestService"}}, &status)
 
-	if *status.DownFor != "Invalid timestamp" {
-		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
+	if *status.Services[0].DownFor != "Invalid timestamp" {
+		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.Services[0].DownFor)
 	}
 }
