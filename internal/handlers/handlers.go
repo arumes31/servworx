@@ -308,28 +308,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			status.Services[i] = enrichServiceStatus(status.Services[i], svc, currentTime).ServiceStatus
 		}
 	}
 
@@ -603,7 +582,13 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
 
-	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
+	currentTime := time.Now().Unix()
+	for i, s := range cfg.Services {
+		if i < len(status.Services) {
+			status.Services[i] = enrichServiceStatus(status.Services[i], s, currentTime).ServiceStatus
+		}
+	}
+
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
@@ -670,6 +655,35 @@ type APIViewData struct {
 	Services []config.ServiceConfig `json:"services"`
 	Status   APIStatusResponse      `json:"status"`
 }
+func enrichServiceStatus(s config.ServiceStatus, svc config.ServiceConfig, currentTime int64) APIServiceStatus {
+	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+	if s.DownSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+		if err == nil {
+			df := formatDuration(currentTime - t.Unix())
+			s.DownFor = &df
+		} else {
+			errStr := "Invalid timestamp"
+			s.DownFor = &errStr
+		}
+	}
+	if s.UpSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+		if err == nil {
+			uf := formatDuration(currentTime - t.Unix())
+			s.UpFor = &uf
+		} else {
+			errStr := "Invalid timestamp"
+			s.UpFor = &errStr
+		}
+	}
+
+	return APIServiceStatus{
+		ServiceStatus: s,
+		History:       monitor.GetHistory(svc.Name),
+	}
+}
+
 
 // JSON Endpoint for Status Fetching
 func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
@@ -678,44 +692,16 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 
 	currentTime := time.Now().Unix()
 
-	for i, svc := range cfg.Services {
-		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
-		}
-	}
-
-
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
-		history := []string{}
 		if i < len(cfg.Services) {
-			history = monitor.GetHistory(cfg.Services[i].Name)
+			apiStatus.Services = append(apiStatus.Services, enrichServiceStatus(s, cfg.Services[i], currentTime))
+		} else {
+			apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
+				ServiceStatus: s,
+				History:       []string{},
+			})
 		}
-		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
-			ServiceStatus: s,
-			History:       history,
-		})
 	}
 
 

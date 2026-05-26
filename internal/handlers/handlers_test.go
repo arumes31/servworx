@@ -107,27 +107,8 @@ func TestEnrichStatusLogic(t *testing.T) {
 	monitor.PushHistory("TestService", "Up")
 	monitor.PushHistory("TestService", "Down")
 
-	// Manually perform enrichment logic as done in handlers.go
-	status.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-	if status.DownSince != nil {
-		tm, err := time.ParseInLocation("2006-01-02 15:04:05", *status.DownSince, time.Local)
-		if err == nil {
-			df := formatDuration(currentTime - tm.Unix())
-			status.DownFor = &df
-		}
-	}
-	if status.UpSince != nil {
-		tm, err := time.ParseInLocation("2006-01-02 15:04:05", *status.UpSince, time.Local)
-		if err == nil {
-			uf := formatDuration(currentTime - tm.Unix())
-			status.UpFor = &uf
-		}
-	}
-
-	enriched := APIServiceStatus{
-		ServiceStatus: status,
-		History:       monitor.GetHistory(svc.Name),
-	}
+	enriched := enrichServiceStatus(status, svc, currentTime)
+	status = enriched.ServiceStatus
 
 	if *status.DownFor != "1 hour" {
 		t.Errorf("expected DownFor to be '1 hour', got %v", *status.DownFor)
@@ -155,14 +136,8 @@ func TestEnrichStatusLogicInvalidTimestamp(t *testing.T) {
 		DownSince: &invalidTime,
 	}
 
-	// Manually perform enrichment logic as done in handlers.go
-	if status.DownSince != nil {
-		_, err := time.ParseInLocation("2006-01-02 15:04:05", *status.DownSince, time.Local)
-		if err != nil {
-			errStr := "Invalid timestamp"
-			status.DownFor = &errStr
-		}
-	}
+	enriched := enrichServiceStatus(status, config.ServiceConfig{}, 0)
+	status = enriched.ServiceStatus
 
 	if *status.DownFor != "Invalid timestamp" {
 		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
