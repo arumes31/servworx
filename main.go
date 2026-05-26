@@ -68,53 +68,75 @@ func main() {
 func initDefaultFiles() error {
 	_ = os.MkdirAll(config.ConfigDir, 0750)
 
+	if err := initConfig(); err != nil {
+		return err
+	}
+
+	if err := initStatus(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initConfig() error {
 	_, err := config.LoadConfig()
-	if err != nil {
-		if os.IsNotExist(err) {
-			adminHash, _ := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
-			// Save default
-			defaultCfg := &config.Config{
-				Users: map[string]string{"admin": string(adminHash)},
-				Services: []config.ServiceConfig{
-					{
-						Name:                "Service1",
-						WebsiteURL:          "http://example.com",
-						ContainerNames:      "service1",
-						Retries:             15,
-						Interval:            120,
-						GracePeriod:         3600,
-						AcceptedStatusCodes: []int{200},
-						Paused:              false,
-					},
-				},
-			}
-			if err := config.SaveConfig(defaultCfg); err != nil {
-				return fmt.Errorf("failed to save default config: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
+	if err == nil {
+		return nil
 	}
 
-	_, err = config.LoadStatus()
-	if err != nil {
-		if os.IsNotExist(err) {
-			defaultStatus := &config.Status{
-				Services: []config.ServiceStatus{
-					{
-						Name:             "Service1",
-						Status:           "Unknown",
-						LastStableStatus: "Unknown",
-					},
-				},
-			}
-			if err := config.SaveStatus(defaultStatus); err != nil {
-				return fmt.Errorf("failed to save default status: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to load status: %w", err)
-		}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to generate default password hash: %w", err)
+	}
+
+	// Save default
+	defaultCfg := &config.Config{
+		Users: map[string]string{"admin": string(adminHash)},
+		Services: []config.ServiceConfig{
+			{
+				Name:                "Service1",
+				WebsiteURL:          "http://example.com",
+				ContainerNames:      "service1",
+				Retries:             15,
+				Interval:            120,
+				GracePeriod:         3600,
+				AcceptedStatusCodes: []int{200},
+				Paused:              false,
+			},
+		},
+	}
+	if err := config.SaveConfig(defaultCfg); err != nil {
+		return fmt.Errorf("failed to save default config: %w", err)
+	}
+	return nil
+}
+
+func initStatus() error {
+	_, err := config.LoadStatus()
+	if err == nil {
+		return nil
+	}
+
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load status: %w", err)
+	}
+
+	defaultStatus := &config.Status{
+		Services: []config.ServiceStatus{
+			{
+				Name:             "Service1",
+				Status:           "Unknown",
+				LastStableStatus: "Unknown",
+			},
+		},
+	}
+	if err := config.SaveStatus(defaultStatus); err != nil {
+		return fmt.Errorf("failed to save default status: %w", err)
+	}
 	return nil
 }

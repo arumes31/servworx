@@ -45,18 +45,18 @@ func GetSession(r *http.Request) (string, bool) {
 	mutex.RLock()
 	data, ok := sessions[sessionID]
 	mutex.RUnlock()
-	
+
 	if !ok {
 		return "", false
 	}
-	
+
 	if time.Now().After(data.ExpiresAt) {
 		mutex.Lock()
 		delete(sessions, sessionID)
 		mutex.Unlock()
 		return "", false
 	}
-	
+
 	return data.Username, true
 }
 
