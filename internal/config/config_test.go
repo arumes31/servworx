@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 )
 
@@ -30,5 +31,65 @@ func TestIsValidContainerName(t *testing.T) {
 				t.Errorf("IsValidContainerName(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestCachingAndDeepCopy(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "servworx-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origConfigDir := ConfigDir
+	ConfigDir = tmpDir
+	defer func() { ConfigDir = origConfigDir }()
+
+	// Reset cache
+	cachedConfig = nil
+	cachedStatus = nil
+
+	// 1. Test Status caching
+	status := &Status{
+		Services: []ServiceStatus{
+			{Name: "Service1", Status: "Up"},
+		},
+	}
+	if err := SaveStatus(status); err != nil {
+		t.Fatalf("SaveStatus failed: %v", err)
+	}
+
+	loaded1, err := LoadStatus()
+	if err != nil {
+		t.Fatalf("LoadStatus 1 failed: %v", err)
+	}
+
+	// Modify loaded1
+	loaded1.Services[0].Status = "Down"
+
+	loaded2, err := LoadStatus()
+	if err != nil {
+		t.Fatalf("LoadStatus 2 failed: %v", err)
+	}
+
+	if loaded2.Services[0].Status != "Up" {
+		t.Errorf("DeepCopy failed: modification to returned object affected cache. Got %s, want Up", loaded2.Services[0].Status)
+	}
+
+	// 2. Test UpdateStatus updates cache
+	err = UpdateStatus(func(s *Status) {
+		s.Services[0].Status = "Maintenance"
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus failed: %v", err)
+	}
+
+	loaded3, err := LoadStatus()
+	if err != nil {
+		t.Fatalf("LoadStatus 3 failed: %v", err)
+	}
+
+	if loaded3.Services[0].Status != "Maintenance" {
+		t.Errorf("UpdateStatus did not update cache correctly. Got %s, want Maintenance", loaded3.Services[0].Status)
 	}
 }
