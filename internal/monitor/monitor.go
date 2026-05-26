@@ -178,6 +178,110 @@ func writeLastRestart(name string, val int64) {
 	path := filepath.Join(config.ConfigDir, getRestartFilename(name))
 	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", val)), 0600)
 }
+func getCurrentServiceConfig(name string) *config.ServiceConfig {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil
+	}
+	for _, s := range cfg.Services {
+		if s.Name == name {
+			svcCopy := s
+			return &svcCopy
+		}
+	}
+	return nil
+}
+
+func updateStatusToChecking(serviceName string) {
+	_ = config.UpdateStatus(func(s *config.Status) {
+		for i := range s.Services {
+			if s.Services[i].Name == serviceName {
+				s.Services[i].Status = "Checking"
+				LogAction("System", fmt.Sprintf("Service %s status: Checking", serviceName), "status")
+				break
+			}
+		}
+	})
+}
+
+func updateStatusAfterCheck(serviceName string, success bool) {
+	_ = config.UpdateStatus(func(s *config.Status) {
+		for j := range s.Services {
+			if s.Services[j].Name == serviceName {
+				oldStatusStr := s.Services[j].LastStableStatus
+				if oldStatusStr == "" {
+					oldStatusStr = s.Services[j].Status
+				}
+
+				newStatus := "Down"
+				if success {
+					newStatus = "Up"
+				}
+				s.Services[j].Status = newStatus
+
+				if newStatus != oldStatusStr {
+					nowStr := time.Now().Format("2006-01-02 15:04:05")
+					if newStatus == "Down" && oldStatusStr == "Up" {
+						s.Services[j].DownSince = &nowStr
+						s.Services[j].UpSince = nil
+						s.Services[j].LastFailure = &nowStr
+						LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", serviceName, nowStr), "system")
+					} else if newStatus == "Up" && oldStatusStr == "Down" {
+						s.Services[j].UpSince = &nowStr
+						s.Services[j].DownSince = nil
+						LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", serviceName, nowStr), "system")
+					}
+				}
+				s.Services[j].LastStableStatus = newStatus
+				LogAction("System", fmt.Sprintf("Service %s status: %s", serviceName, newStatus), "status")
+				break
+			}
+		}
+	})
+
+	newSt := "Down"
+	if success {
+		newSt = "Up"
+	}
+	PushHistory(serviceName, newSt)
+}
+
+
+func performHealthChecks(svc *config.ServiceConfig) (bool, string, bool) {
+	success := false
+	var message string
+	for i := 1; i <= svc.Retries; i++ {
+		success, message = checkWebsite(svc.WebsiteURL, svc.AcceptedStatusCodes, svc.InsecureSkipVerify)
+		updateStatusAfterCheck(svc.Name, success)
+
+		fmt.Printf("%s: %s\n", svc.Name, message)
+		if success {
+			break
+		} else if i < svc.Retries {
+			fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", svc.Name, i, svc.Retries, svc.Interval)
+
+			select {
+			case <-time.After(time.Duration(svc.Interval) * time.Second):
+				// waited
+			case <-stopChan:
+				return false, "", true
+			}
+		}
+	}
+	return success, message, false
+}
+func handleFailure(svc *config.ServiceConfig, restartAllowed bool, remainingGrace int64) int64 {
+	fmt.Printf("%s: Max retries (%d) reached.\n", svc.Name, svc.Retries)
+	if restartAllowed {
+		lastRestart := restartContainers(svc.ContainerNames, svc.Name)
+		writeLastRestart(svc.Name, lastRestart)
+		return lastRestart
+	}
+	fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", svc.Name, remainingGrace)
+	LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", svc.Name, remainingGrace), "error")
+	return 0
+}
+
 
 func monitorService(svc config.ServiceConfig) {
 	defer wg.Done()
@@ -188,20 +292,8 @@ func monitorService(svc config.ServiceConfig) {
 	defer ticker.Stop()
 
 	for {
-		// Read latest config for this service in case it changed (like paused)
-		var currentSvc *config.ServiceConfig
-		cfg, err := config.LoadConfig()
-		if err == nil {
-			for _, s := range cfg.Services {
-				if s.Name == svc.Name {
-					currentSvc = &s
-					break
-				}
-			}
-		}
-
+		currentSvc := getCurrentServiceConfig(svc.Name)
 		if currentSvc == nil {
-			// Service was deleted, exit goroutine
 			return
 		}
 
@@ -222,85 +314,17 @@ func monitorService(svc config.ServiceConfig) {
 			remainingGrace = 0
 		}
 
-		_ = config.UpdateStatus(func(s *config.Status) {
-			for i := range s.Services {
-				if s.Services[i].Name == currentSvc.Name {
-					s.Services[i].Status = "Checking"
-					LogAction("System", fmt.Sprintf("Service %s status: Checking", currentSvc.Name), "status")
-					break
-				}
-			}
-		})
+		updateStatusToChecking(currentSvc.Name)
 
-		success := false
-		var message string
-		for i := 1; i <= currentSvc.Retries; i++ {
-			success, message = checkWebsite(currentSvc.WebsiteURL, currentSvc.AcceptedStatusCodes, currentSvc.InsecureSkipVerify)
-
-			_ = config.UpdateStatus(func(s *config.Status) {
-				for j := range s.Services {
-					if s.Services[j].Name == currentSvc.Name {
-						oldStatusStr := s.Services[j].LastStableStatus
-						if oldStatusStr == "" {
-							oldStatusStr = s.Services[j].Status
-						}
-						
-						newStatus := "Down"
-						if success {
-							newStatus = "Up"
-						}
-						s.Services[j].Status = newStatus
-
-						if newStatus != oldStatusStr {
-							nowStr := time.Now().Format("2006-01-02 15:04:05")
-							if newStatus == "Down" && oldStatusStr == "Up" {
-								s.Services[j].DownSince = &nowStr
-								s.Services[j].UpSince = nil
-								s.Services[j].LastFailure = &nowStr
-								LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", currentSvc.Name, nowStr), "system")
-							} else if newStatus == "Up" && oldStatusStr == "Down" {
-								s.Services[j].UpSince = &nowStr
-								s.Services[j].DownSince = nil
-								LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", currentSvc.Name, nowStr), "system")
-							}
-						}
-						s.Services[j].LastStableStatus = newStatus
-						LogAction("System", fmt.Sprintf("Service %s status: %s", currentSvc.Name, newStatus), "status")
-						break
-					}
-				}
-			})
-
-			// Push to in-memory history (not persisted to disk)
-			newSt := "Down"
-			if success {
-				newSt = "Up"
-			}
-			PushHistory(currentSvc.Name, newSt)
-
-			fmt.Printf("%s: %s\n", currentSvc.Name, message)
-			if success {
-				break
-			} else if i < currentSvc.Retries {
-				fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", currentSvc.Name, i, currentSvc.Retries, currentSvc.Interval)
-				
-				select {
-				case <-time.After(time.Duration(currentSvc.Interval) * time.Second):
-					// waited
-				case <-stopChan:
-					return
-				}
-			}
+		success, _, shouldExit := performHealthChecks(currentSvc)
+		if shouldExit {
+			return
 		}
 
 		if !success {
-			fmt.Printf("%s: Max retries (%d) reached.\n", currentSvc.Name, currentSvc.Retries)
-			if restartAllowed {
-				lastRestart = restartContainers(currentSvc.ContainerNames, currentSvc.Name)
-				writeLastRestart(currentSvc.Name, lastRestart)
-			} else {
-				fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", currentSvc.Name, remainingGrace)
-				LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", currentSvc.Name, remainingGrace), "error")
+			newLastRestart := handleFailure(currentSvc, restartAllowed, remainingGrace)
+			if newLastRestart > 0 {
+				lastRestart = newLastRestart
 			}
 		}
 
