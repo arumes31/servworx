@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -107,7 +106,6 @@ func formatDuration(seconds int64) string {
 	}
 	return strings.Join(parts, ", ")
 }
-
 
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -294,7 +292,6 @@ type ConfigViewData struct {
 	Logs     string                 `json:"logs,omitempty"`
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
-
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
@@ -494,7 +491,6 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc := cfg.Services[idx]
-	var validContainerName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 	// run in background to not block HTTP request
 	go func(names, name string, user string) {
@@ -505,7 +501,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 			if c == "" {
 				continue
 			}
-			if !validContainerName.MatchString(c) {
+			if !config.IsValidContainerName(c) {
 				monitor.LogAction(user, fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
 				restartSucceeded = false
 				continue
@@ -587,6 +583,11 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
 		if c != "" {
+			if !config.IsValidContainerName(c) {
+				monitor.LogAction(username, fmt.Sprintf("Invalid container name blocked from logs: %s", c), "error")
+				fmt.Fprintf(&logsBuilder, "Logs for %s: Invalid container name\n\n", c)
+				continue
+			}
 			// #nosec G204
 			cmd := exec.Command("docker", "logs", "--tail", "10", c)
 			out, _ := cmd.CombinedOutput()
@@ -705,7 +706,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
 		history := []string{}
@@ -717,7 +717,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 			History:       history,
 		})
 	}
-
 
 	w.Header().Set("Content-Type", "application/json")
 	data := APIViewData{
@@ -762,7 +761,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	var targetContainer string
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
-		if c != "" {
+		if c != "" && config.IsValidContainerName(c) {
 			targetContainer = c
 			break
 		}
@@ -773,7 +772,6 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
-
 
 	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
