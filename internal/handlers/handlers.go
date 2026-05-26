@@ -308,31 +308,9 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			enrichServiceStatus(&status.Services[i], svc, currentTime)
 		}
 	}
-
 	// Just display
 	data := ConfigViewData{
 		Services: cfg.Services,
@@ -384,101 +362,15 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if action == "delete" {
-		deletedName := cfg.Services[idx].Name
-		_ = config.UpdateConfig(func(c *config.Config) {
-			c.Services = append(c.Services[:idx], c.Services[idx+1:]...)
-		})
-		_ = config.UpdateStatus(func(s *config.Status) {
-			for i, sts := range s.Services {
-				if sts.Name == deletedName {
-					s.Services = append(s.Services[:i], s.Services[i+1:]...)
-					break
-				}
-			}
-		})
-		monitor.LogAction(username, fmt.Sprintf("Deleted service: %s", deletedName), "user")
-		monitor.LogAction("System", fmt.Sprintf("Removed status for service: %s", deletedName), "system")
-
-		monitor.RestartMonitoring()
-		http.Redirect(w, r, "/config", http.StatusSeeOther)
-		return
+	switch action {
+	case "delete":
+		handleDeleteService(w, r, username, idx, cfg)
+	case "update":
+		handleUpdateService(w, r, username, idx, cfg)
+	default:
+		renderConfigWithError(w, "Invalid action specified")
 	}
-
-	if action == "update" {
-		r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-		_ = r.ParseForm()
-		retries, err1 := strconv.Atoi(r.FormValue("retries"))
-		interval, err2 := strconv.Atoi(r.FormValue("interval"))
-		gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
-
-		if err1 != nil || err2 != nil || err3 != nil || retries < 1 || interval < 1 || gracePeriod < 1 {
-			monitor.LogAction(username, "Invalid numeric inputs for service", "error")
-			renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
-			return
-		}
-
-		codesStr := r.FormValue("accepted_status_codes")
-		var codes []int
-		if strings.TrimSpace(codesStr) == "" {
-			codes = []int{200}
-			monitor.LogAction(username, fmt.Sprintf("Service %d: Empty accepted_status_codes, defaulting to [200]", idx), "user")
-		} else {
-			parts := strings.Split(codesStr, ",")
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					c, err := strconv.Atoi(p)
-					if err != nil {
-						renderConfigWithError(w, "Invalid status codes")
-						return
-					}
-					codes = append(codes, c)
-				}
-			}
-			if len(codes) == 0 {
-				codes = []int{200}
-				monitor.LogAction(username, fmt.Sprintf("Service %d: No valid accepted_status_codes, defaulting to [200]", idx), "user")
-			}
-		}
-
-		oldName := cfg.Services[idx].Name
-		newName := r.FormValue("name")
-		insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-
-		_ = config.UpdateConfig(func(c *config.Config) {
-			c.Services[idx].Name = newName
-			c.Services[idx].WebsiteURL = r.FormValue("website_url")
-			c.Services[idx].ContainerNames = r.FormValue("container_names")
-			c.Services[idx].Retries = retries
-			c.Services[idx].Interval = interval
-			c.Services[idx].GracePeriod = gracePeriod
-			c.Services[idx].AcceptedStatusCodes = codes
-			c.Services[idx].InsecureSkipVerify = insecureSkip
-			// paused remains the same
-		})
-
-		if oldName != newName {
-			_ = config.UpdateStatus(func(s *config.Status) {
-				for i := range s.Services {
-					if s.Services[i].Name == oldName {
-						s.Services[i].Name = newName
-						monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
-						break
-					}
-				}
-			})
-		}
-
-		monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
-		monitor.RestartMonitoring()
-		http.Redirect(w, r, "/config", http.StatusSeeOther)
-		return
-	}
-
-	renderConfigWithError(w, "Invalid action specified")
 }
-
 func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
@@ -680,31 +572,9 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			enrichServiceStatus(&status.Services[i], svc, currentTime)
 		}
 	}
-
 
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
@@ -809,4 +679,122 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = cmd.Wait()
+}
+
+func parseStatusCodes(codesStr string) ([]int, error) {
+	var codes []int
+	if strings.TrimSpace(codesStr) == "" {
+		return []int{200}, nil
+	}
+	parts := strings.Split(codesStr, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			c, err := strconv.Atoi(p)
+			if err != nil {
+				return nil, err
+			}
+			codes = append(codes, c)
+		}
+	}
+	if len(codes) == 0 {
+		return []int{200}, nil
+	}
+	return codes, nil
+}
+
+func enrichServiceStatus(s *config.ServiceStatus, svc config.ServiceConfig, currentTime int64) {
+	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+	if s.DownSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+		if err == nil {
+			df := formatDuration(currentTime - t.Unix())
+			s.DownFor = &df
+		} else {
+			errStr := "Invalid timestamp"
+			s.DownFor = &errStr
+		}
+	}
+	if s.UpSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+		if err == nil {
+			uf := formatDuration(currentTime - t.Unix())
+			s.UpFor = &uf
+		} else {
+			errStr := "Invalid timestamp"
+			s.UpFor = &errStr
+		}
+	}
+}
+
+func handleDeleteService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+	deletedName := cfg.Services[idx].Name
+	_ = config.UpdateConfig(func(c *config.Config) {
+		c.Services = append(c.Services[:idx], c.Services[idx+1:]...)
+	})
+	_ = config.UpdateStatus(func(s *config.Status) {
+		for i, sts := range s.Services {
+			if sts.Name == deletedName {
+				s.Services = append(s.Services[:i], s.Services[i+1:]...)
+				break
+			}
+		}
+	})
+	monitor.LogAction(username, fmt.Sprintf("Deleted service: %s", deletedName), "user")
+	monitor.LogAction("System", fmt.Sprintf("Removed status for service: %s", deletedName), "system")
+
+	monitor.RestartMonitoring()
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+func handleUpdateService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	_ = r.ParseForm()
+
+	retries, err1 := strconv.Atoi(r.FormValue("retries"))
+	interval, err2 := strconv.Atoi(r.FormValue("interval"))
+	gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
+
+	if err1 != nil || err2 != nil || err3 != nil || retries < 1 || interval < 1 || gracePeriod < 1 {
+		monitor.LogAction(username, "Invalid numeric inputs for service", "error")
+		renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
+		return
+	}
+
+	codes, err := parseStatusCodes(r.FormValue("accepted_status_codes"))
+	if err != nil {
+		renderConfigWithError(w, "Invalid status codes")
+		return
+	}
+
+	oldName := cfg.Services[idx].Name
+	newName := r.FormValue("name")
+	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
+
+	_ = config.UpdateConfig(func(c *config.Config) {
+		c.Services[idx].Name = newName
+		c.Services[idx].WebsiteURL = r.FormValue("website_url")
+		c.Services[idx].ContainerNames = r.FormValue("container_names")
+		c.Services[idx].Retries = retries
+		c.Services[idx].Interval = interval
+		c.Services[idx].GracePeriod = gracePeriod
+		c.Services[idx].AcceptedStatusCodes = codes
+		c.Services[idx].InsecureSkipVerify = insecureSkip
+	})
+
+	if oldName != newName {
+		_ = config.UpdateStatus(func(s *config.Status) {
+			for i := range s.Services {
+				if s.Services[i].Name == oldName {
+					s.Services[i].Name = newName
+					monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
+					break
+				}
+			}
+		})
+	}
+
+	monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
+	monitor.RestartMonitoring()
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
