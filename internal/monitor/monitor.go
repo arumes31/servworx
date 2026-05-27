@@ -57,6 +57,13 @@ func GetHistory(serviceName string) []string {
 	return result
 }
 
+// ResetHistory clears all health check history.
+func ResetHistory() {
+	historyMutex.Lock()
+	defer historyMutex.Unlock()
+	healthHistory = make(map[string][]string)
+}
+
 func LogAction(username, action, logType string) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	color := colorReset

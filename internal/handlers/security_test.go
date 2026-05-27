@@ -19,8 +19,12 @@ func TestHandleUpdateServicePOSTSecurity(t *testing.T) {
 
 	// Setup mock templates
 	templateDir := filepath.Join(tmpDir, "templates")
-	os.MkdirAll(templateDir, 0755)
-	os.WriteFile(filepath.Join(templateDir, "config.html"), []byte("{{.Error}}"), 0644)
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "config.html"), []byte("{{.Error}}"), 0644); err != nil {
+		t.Fatalf("failed to write config.html: %v", err)
+	}
 	InitTemplates(templateDir)
 
 	// Create a dummy config and status
@@ -82,8 +86,12 @@ func TestHandleViewLogsGETSecurity(t *testing.T) {
 	tmpDir := t.TempDir()
 	config.SetConfigDir(tmpDir)
 	templateDir := filepath.Join(tmpDir, "templates")
-	os.MkdirAll(templateDir, 0755)
-	os.WriteFile(filepath.Join(templateDir, "config.html"), []byte("{{.Logs}}"), 0644)
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "config.html"), []byte("{{.Logs}}"), 0644); err != nil {
+		t.Fatalf("failed to write config.html: %v", err)
+	}
 	InitTemplates(templateDir)
 
 	cfg := &config.Config{

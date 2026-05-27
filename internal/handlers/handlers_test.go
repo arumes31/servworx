@@ -87,6 +87,7 @@ func TestCheckPassword(t *testing.T) {
 }
 
 func TestEnrichStatusLogic(t *testing.T) {
+	monitor.ResetHistory()
 	currentTime := time.Now().Unix()
 	downTime := time.Unix(currentTime-3600, 0).Format("2006-01-02 15:04:05")
 	upTime := time.Unix(currentTime-7200, 0).Format("2006-01-02 15:04:05")
