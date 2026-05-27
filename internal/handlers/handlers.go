@@ -597,8 +597,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(&logsBuilder, "Invalid container name blocked: %s\n\n", c)
 				continue
 			}
-			// #nosec G204
-			cmd := exec.Command("docker", "logs", "--tail", "10", c)
+			cmd := exec.Command("docker", "logs", "--tail", "10", c) // #nosec G204
 			out, _ := cmd.CombinedOutput()
 			outStr := string(out)
 			if outStr == "" {
