@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestFormatDuration(t *testing.T) {
 
 func TestCheckPassword(t *testing.T) {
 	// A valid bcrypt hash for "password123"
-	bcryptHash := "$2a$10$VE976zO9NGR9A/Y7s5/o6e3y3y3y3y3y3y3y3y3y3y3y3y3y3y3y3"
+	bcryptHash := "a0/Y7s5/o6e3y3y3y3y3y3y3y3y3y3y3y3y3y3y3y3"
 
 	tests := []struct {
 		name       string
@@ -54,7 +55,7 @@ func TestCheckPassword(t *testing.T) {
 		{
 			name:       "Bcrypt prefix match but invalid hash",
 			password:   "any",
-			storedHash: "$2a$invalidbcrypt",
+			storedHash: "a",
 			want:       false,
 		},
 		{
@@ -166,5 +167,58 @@ func TestEnrichStatusLogicInvalidTimestamp(t *testing.T) {
 
 	if *status.DownFor != "Invalid timestamp" {
 		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
+	}
+}
+
+func TestParseStatusCodes(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    []int
+		wantErr bool
+	}{
+		{
+			name:    "Empty string",
+			input:   "",
+			want:    []int{200},
+			wantErr: false,
+		},
+		{
+			name:    "Single valid code",
+			input:   "200",
+			want:    []int{200},
+			wantErr: false,
+		},
+		{
+			name:    "Multiple valid codes",
+			input:   "200,201, 404 ",
+			want:    []int{200, 201, 404},
+			wantErr: false,
+		},
+		{
+			name:    "Invalid code",
+			input:   "200,abc",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "Only whitespace and commas",
+			input:   " , , ",
+			want:    []int{200},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseStatusCodes(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseStatusCodes() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseStatusCodes() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
