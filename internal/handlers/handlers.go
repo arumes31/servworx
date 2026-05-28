@@ -108,6 +108,38 @@ func formatDuration(seconds int64) string {
 	return strings.Join(parts, ", ")
 }
 
+// enrichServiceStatus populates UI-only fields like TimeToRestart, DownFor, and UpFor.
+func enrichServiceStatus(cfg *config.Config, status *config.Status) {
+	currentTime := time.Now().Unix()
+
+	for i, svc := range cfg.Services {
+		if i < len(status.Services) {
+			s := &status.Services[i]
+			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+			if s.DownSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+				if err == nil {
+					df := formatDuration(currentTime - t.Unix())
+					s.DownFor = &df
+				} else {
+					errStr := "Invalid timestamp"
+					s.DownFor = &errStr
+				}
+			}
+			if s.UpSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+				if err == nil {
+					uf := formatDuration(currentTime - t.Unix())
+					s.UpFor = &uf
+				} else {
+					errStr := "Invalid timestamp"
+					s.UpFor = &errStr
+				}
+			}
+		}
+	}
+}
+
 
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -304,34 +336,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	status, _ := config.LoadStatus()
 
 	// Recalculate UI fields
-	currentTime := time.Now().Unix()
-
-	for i, svc := range cfg.Services {
-		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
-		}
-	}
+	enrichServiceStatus(cfg, status)
 
 	// Just display
 	data := ConfigViewData{
@@ -350,6 +355,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 func renderConfigWithError(w http.ResponseWriter, errMsg string) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
+	enrichServiceStatus(cfg, status)
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
@@ -603,7 +609,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
 
-	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
+	enrichServiceStatus(cfg, status)
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
@@ -676,34 +682,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
 
-	currentTime := time.Now().Unix()
-
-	for i, svc := range cfg.Services {
-		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
-		}
-	}
+	enrichServiceStatus(cfg, status)
 
 
 	apiStatus := APIStatusResponse{}
