@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"testing"
+	"strings"
 	"time"
 
 	"github.com/arumes31/servworx/internal/config"
@@ -166,5 +167,36 @@ func TestEnrichStatusLogicInvalidTimestamp(t *testing.T) {
 
 	if *status.DownFor != "Invalid timestamp" {
 		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
+	}
+}
+
+func TestValidateContainerNamesLogic(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid single", "container1", true},
+		{"valid multiple", "container1, container2.test, container_3", true},
+		{"invalid single", "container;rm", false},
+		{"invalid in multiple", "container1, container;rm, container3", false},
+		{"empty strings", "container1, , container2", true}, // Split and trim will result in empty which is skipped in config update loop validation
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid := true
+			parts := strings.Split(tt.input, ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" && !config.IsValidContainerName(p) {
+					valid = false
+					break
+				}
+			}
+			if valid != tt.expected {
+				t.Errorf("Validation for %q = %v, want %v", tt.input, valid, tt.expected)
+			}
+		})
 	}
 }
