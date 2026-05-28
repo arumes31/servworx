@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -78,5 +80,67 @@ func TestGetHistoryCopy(t *testing.T) {
 	newHistory := GetHistory(serviceName)
 	if newHistory[0] != "Up" {
 		t.Errorf("expected history to remain 'Up', but got '%s'", newHistory[0])
+	}
+}
+
+func TestCheckWebsite(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}))
+	defer ts.Close()
+
+	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success, got failure: %s", msg)
+	}
+
+	success, msg = checkWebsite(ts.URL, []int{404}, false)
+	if success {
+		t.Errorf("expected failure for 404, got success: %s", msg)
+	}
+}
+
+func TestCheckWebsiteFallback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}))
+	defer ts.Close()
+
+	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success with GET fallback, got failure: %s", msg)
+	}
+}
+
+func TestCheckWebsiteInsecure(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	// Should fail without insecure skip (default client will fail on self-signed cert)
+	success, _ := checkWebsite(ts.URL, []int{200}, false)
+	if success {
+		t.Error("expected failure for self-signed cert without insecure skip")
+	}
+
+	// Should succeed with insecure skip
+	success, msg := checkWebsite(ts.URL, []int{200}, true)
+	if !success {
+		t.Errorf("expected success with insecure skip, got failure: %s", msg)
 	}
 }

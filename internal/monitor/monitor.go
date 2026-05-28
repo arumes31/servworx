@@ -32,6 +32,17 @@ var (
 	colorYellow = "\033[93m"
 	colorRed    = "\033[91m"
 	colorReset  = "\033[0m"
+
+	defaultHttpClient = &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	insecureHttpClient = &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			// #nosec G402
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
 )
 
 // PushHistory adds a status entry to the in-memory history for a service.
@@ -78,12 +89,9 @@ func LogAction(username, action, logType string) {
 }
 
 func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, string) {
-	// #nosec G402
-	httpClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkip},
-		},
+	httpClient := defaultHttpClient
+	if insecureSkip {
+		httpClient = insecureHttpClient
 	}
 	resp, err := httpClient.Head(url)
 	if err != nil {
