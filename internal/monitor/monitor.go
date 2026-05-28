@@ -188,24 +188,7 @@ func monitorService(svc config.ServiceConfig) {
 	defer ticker.Stop()
 
 	for {
-		// Read latest config for this service in case it changed (like paused)
-		var currentSvc *config.ServiceConfig
-		cfg, err := config.LoadConfig()
-		if err == nil {
-			for _, s := range cfg.Services {
-				if s.Name == svc.Name {
-					currentSvc = &s
-					break
-				}
-			}
-		}
-
-		if currentSvc == nil {
-			// Service was deleted, exit goroutine
-			return
-		}
-
-		if currentSvc.Paused {
+		if svc.Paused {
 			select {
 			case <-stopChan:
 				return
@@ -216,17 +199,17 @@ func monitorService(svc config.ServiceConfig) {
 
 		now := time.Now().Unix()
 		timeSinceLastRestart := now - lastRestart
-		restartAllowed := timeSinceLastRestart >= int64(currentSvc.GracePeriod)
-		remainingGrace := int64(currentSvc.GracePeriod) - timeSinceLastRestart
+		restartAllowed := timeSinceLastRestart >= int64(svc.GracePeriod)
+		remainingGrace := int64(svc.GracePeriod) - timeSinceLastRestart
 		if remainingGrace < 0 {
 			remainingGrace = 0
 		}
 
 		_ = config.UpdateStatus(func(s *config.Status) {
 			for i := range s.Services {
-				if s.Services[i].Name == currentSvc.Name {
+				if s.Services[i].Name == svc.Name {
 					s.Services[i].Status = "Checking"
-					LogAction("System", fmt.Sprintf("Service %s status: Checking", currentSvc.Name), "status")
+					LogAction("System", fmt.Sprintf("Service %s status: Checking", svc.Name), "status")
 					break
 				}
 			}
@@ -234,12 +217,12 @@ func monitorService(svc config.ServiceConfig) {
 
 		success := false
 		var message string
-		for i := 1; i <= currentSvc.Retries; i++ {
-			success, message = checkWebsite(currentSvc.WebsiteURL, currentSvc.AcceptedStatusCodes, currentSvc.InsecureSkipVerify)
+		for i := 1; i <= svc.Retries; i++ {
+			success, message = checkWebsite(svc.WebsiteURL, svc.AcceptedStatusCodes, svc.InsecureSkipVerify)
 
 			_ = config.UpdateStatus(func(s *config.Status) {
 				for j := range s.Services {
-					if s.Services[j].Name == currentSvc.Name {
+					if s.Services[j].Name == svc.Name {
 						oldStatusStr := s.Services[j].LastStableStatus
 						if oldStatusStr == "" {
 							oldStatusStr = s.Services[j].Status
@@ -257,15 +240,15 @@ func monitorService(svc config.ServiceConfig) {
 								s.Services[j].DownSince = &nowStr
 								s.Services[j].UpSince = nil
 								s.Services[j].LastFailure = &nowStr
-								LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", currentSvc.Name, nowStr), "system")
+								LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", svc.Name, nowStr), "system")
 							} else if newStatus == "Up" && oldStatusStr == "Down" {
 								s.Services[j].UpSince = &nowStr
 								s.Services[j].DownSince = nil
-								LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", currentSvc.Name, nowStr), "system")
+								LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", svc.Name, nowStr), "system")
 							}
 						}
 						s.Services[j].LastStableStatus = newStatus
-						LogAction("System", fmt.Sprintf("Service %s status: %s", currentSvc.Name, newStatus), "status")
+						LogAction("System", fmt.Sprintf("Service %s status: %s", svc.Name, newStatus), "status")
 						break
 					}
 				}
@@ -276,16 +259,16 @@ func monitorService(svc config.ServiceConfig) {
 			if success {
 				newSt = "Up"
 			}
-			PushHistory(currentSvc.Name, newSt)
+			PushHistory(svc.Name, newSt)
 
-			fmt.Printf("%s: %s\n", currentSvc.Name, message)
+			fmt.Printf("%s: %s\n", svc.Name, message)
 			if success {
 				break
-			} else if i < currentSvc.Retries {
-				fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", currentSvc.Name, i, currentSvc.Retries, currentSvc.Interval)
+			} else if i < svc.Retries {
+				fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", svc.Name, i, svc.Retries, svc.Interval)
 				
 				select {
-				case <-time.After(time.Duration(currentSvc.Interval) * time.Second):
+				case <-time.After(time.Duration(svc.Interval) * time.Second):
 					// waited
 				case <-stopChan:
 					return
@@ -294,13 +277,13 @@ func monitorService(svc config.ServiceConfig) {
 		}
 
 		if !success {
-			fmt.Printf("%s: Max retries (%d) reached.\n", currentSvc.Name, currentSvc.Retries)
+			fmt.Printf("%s: Max retries (%d) reached.\n", svc.Name, svc.Retries)
 			if restartAllowed {
-				lastRestart = restartContainers(currentSvc.ContainerNames, currentSvc.Name)
-				writeLastRestart(currentSvc.Name, lastRestart)
+				lastRestart = restartContainers(svc.ContainerNames, svc.Name)
+				writeLastRestart(svc.Name, lastRestart)
 			} else {
-				fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", currentSvc.Name, remainingGrace)
-				LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", currentSvc.Name, remainingGrace), "error")
+				fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", svc.Name, remainingGrace)
+				LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", svc.Name, remainingGrace), "error")
 			}
 		}
 
