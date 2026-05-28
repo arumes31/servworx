@@ -139,6 +139,13 @@ func TestDestroySession(t *testing.T) {
 	if !found {
 		t.Error("Session cookie not cleared in response")
 	}
+
+	t.Run("Missing cookie", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/logout", nil)
+		w := httptest.NewRecorder()
+		// Should not panic and should return early
+		DestroySession(w, req)
+	})
 }
 
 func TestSetSessionCookie(t *testing.T) {
