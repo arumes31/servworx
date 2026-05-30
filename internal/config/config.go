@@ -46,6 +46,10 @@ type ServiceConfig struct {
 	AcceptedStatusCodes []int  `json:"accepted_status_codes"`
 	Paused              bool   `json:"paused"`
 	InsecureSkipVerify  bool   `json:"insecure_skip_verify"`
+	EnableWebhook       bool   `json:"enable_webhook"`
+	EnableTeams         bool   `json:"enable_teams"`
+	EnableTelegram      bool   `json:"enable_telegram"`
+	EnableEmail         bool   `json:"enable_email"`
 }
 
 type Status struct {
@@ -53,9 +57,9 @@ type Status struct {
 }
 
 type ServiceStatus struct {
-	Name             string   `json:"name"`
-	Status           string   `json:"status"`
-	LastFailure      *string  `json:"last_failure"`
+	Name             string  `json:"name"`
+	Status           string  `json:"status"`
+	LastFailure      *string `json:"last_failure"`
 	DownSince        *string `json:"down_since"`
 	UpSince          *string `json:"up_since"`
 	LastStableStatus string  `json:"last_stable_status"`
