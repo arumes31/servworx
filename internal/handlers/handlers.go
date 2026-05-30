@@ -23,7 +23,14 @@ import (
 var templates *template.Template
 
 func InitTemplates(templateDir string) {
-	templates = template.Must(template.ParseGlob(filepath.Join(templateDir, "*.html")))
+	templates = template.Must(template.New("").Funcs(template.FuncMap{
+		"div": func(a, b int) int {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+	}).ParseGlob(filepath.Join(templateDir, "*.html")))
 }
 
 func hashPassword(password string) (string, error) {
@@ -474,6 +481,21 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	enableTeams := r.FormValue("enable_teams") == "on"
 	enableTelegram := r.FormValue("enable_telegram") == "on"
 	enableEmail := r.FormValue("enable_email") == "on"
+	alertOnFailure := r.FormValue("alert_on_failure") == "on"
+	alertOnRecovery := r.FormValue("alert_on_recovery") == "on"
+	alertOnRestart := r.FormValue("alert_on_restart") == "on"
+
+	// Convert repeat interval from minutes (input in UI) to seconds
+	repeatIntervalMin, _ := strconv.Atoi(r.FormValue("alert_repeat_interval"))
+	alertRepeatInterval := repeatIntervalMin * 60
+	if alertRepeatInterval < 0 {
+		alertRepeatInterval = 0
+	}
+
+	alertMaxRepeats, _ := strconv.Atoi(r.FormValue("alert_max_repeats"))
+	if alertMaxRepeats < 0 {
+		alertMaxRepeats = 0
+	}
 
 	_ = config.UpdateConfig(func(c *config.Config) {
 		c.Services[idx].Name = newName
@@ -488,6 +510,11 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		c.Services[idx].EnableTeams = enableTeams
 		c.Services[idx].EnableTelegram = enableTelegram
 		c.Services[idx].EnableEmail = enableEmail
+		c.Services[idx].AlertOnFailure = alertOnFailure
+		c.Services[idx].AlertOnRecovery = alertOnRecovery
+		c.Services[idx].AlertOnRestart = alertOnRestart
+		c.Services[idx].AlertRepeatInterval = alertRepeatInterval
+		c.Services[idx].AlertMaxRepeats = alertMaxRepeats
 	})
 
 	if oldName != newName {
@@ -696,6 +723,11 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 			EnableTeams:         false,
 			EnableTelegram:      false,
 			EnableEmail:         false,
+			AlertOnFailure:      true,
+			AlertOnRecovery:     true,
+			AlertOnRestart:      true,
+			AlertRepeatInterval: 0,
+			AlertMaxRepeats:     0,
 		})
 	})
 
