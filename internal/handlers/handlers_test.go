@@ -35,9 +35,23 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
+func TestHashPassword(t *testing.T) {
+	password := "securepassword123"
+	hash, err := hashPassword(password)
+	if err != nil {
+		t.Fatalf("hashPassword failed: %v", err)
+	}
+	if hash == "" {
+		t.Fatal("hashPassword returned empty string")
+	}
+	if !checkPassword(password, hash) {
+		t.Errorf("checkPassword failed for newly generated hash")
+	}
+}
+
 func TestCheckPassword(t *testing.T) {
 	// A valid bcrypt hash for "password123"
-	bcryptHash := "$2a$10$VE976zO9NGR9A/Y7s5/o6e3y3y3y3y3y3y3y3y3y3y3y3y3y3y3y3"
+	bcryptHash, _ := hashPassword("password123")
 
 	tests := []struct {
 		name       string
@@ -49,7 +63,7 @@ func TestCheckPassword(t *testing.T) {
 			name:       "Bcrypt happy path",
 			password:   "password123",
 			storedHash: bcryptHash,
-			want:       false, // Will return false because the mock hash isn't real, but confirms prefix branching
+			want:       true,
 		},
 		{
 			name:       "Bcrypt prefix match but invalid hash",
