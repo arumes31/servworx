@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Mastery Access | Servworx</title>
+    <title>Servworx Login</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;600;700;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&amp;display=swap" rel="stylesheet"/>
@@ -176,19 +176,8 @@
     <section class="hidden lg:flex flex-1 flex-col items-center justify-center p-xl relative overflow-hidden">
         <div class="relative z-10 flex flex-col items-center gap-xl max-w-lg">
             <div class="relative flex justify-center">
-                <!-- Premium Inline Rotating Double-Star SVG -->
-                <div class="w-64 h-64 animate-windrose filter drop-shadow(0 0 25px rgba(0, 242, 255, 0.4))">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-full h-full">
-                        <defs>
-                            <linearGradient id="starGradientLeft" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#00F2FF;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#FF00E5;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
-                        <path d="M50 5 L58 42 L95 50 L58 58 L50 95 L42 58 L5 50 L42 42 Z" fill="url(#starGradientLeft)"/>
-                        <path d="M50 25 L54 46 L75 50 L54 54 L50 75 L46 54 L25 50 L46 46 Z" fill="#FFFFFF" opacity="0.6"/>
-                    </svg>
-                </div>
+                <!-- Premium Served Rotating Double-Star Logo -->
+                <img alt="Servworx Wind Rose Star" class="w-64 h-64 animate-windrose filter drop-shadow(0 0 25px rgba(0, 242, 255, 0.4))" src="/logo.svg"/>
                 <div class="absolute inset-0 bg-primary-container/10 blur-[100px] rounded-full -z-10"></div>
             </div>
             <div class="text-center space-y-md">
@@ -201,6 +190,15 @@
                         <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">BUFFER_SYNCING</div>
                         <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">NODE_CONNECTING</div>
                         <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">GATEWAY_OPEN</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">SYSTEM_DIAGNOSTICS_OK</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">SECURE_TUNNEL_ESTABLISHED</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">METRIC_INGESTION_ACTIVE</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">CONTAINER_ORCHESTRATION_READY</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">INTEGRITY_CHECK_PASSED</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">UPTIME_OPTIMIZATION_RUNNING</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">DOCKER_SOCKET_SECURED</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">THREAT_SHIELD_DEPLOYED</div>
+                        <div class="ticker-item font-label-sm text-label-sm text-on-surface-variant/40 uppercase tracking-[0.4em] font-['JetBrains_Mono']">TELEMETRY_STREAM_CONNECTED</div>
                     </div>
                 </div>
             </div>
@@ -214,19 +212,8 @@
         <div class="flex flex-col gap-xl mt-xl">
             <!-- Mobile Logo (Visible only on small screens) -->
             <div class="lg:hidden flex justify-center mb-md">
-                <!-- Premium Inline Rotating Double-Star SVG -->
-                <div class="w-16 h-16 animate-windrose filter drop-shadow(0 0 15px rgba(0, 242, 255, 0.4))">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-full h-full">
-                        <defs>
-                            <linearGradient id="starGradientMobile" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#00F2FF;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#FF00E5;stop-opacity:1" />
-                            </linearGradient>
-                        </defs>
-                        <path d="M50 5 L58 42 L95 50 L58 58 L50 95 L42 58 L5 50 L42 42 Z" fill="url(#starGradientMobile)"/>
-                        <path d="M50 25 L54 46 L75 50 L54 54 L50 75 L46 54 L25 50 L46 46 Z" fill="#FFFFFF" opacity="0.6"/>
-                    </svg>
-                </div>
+                <!-- Premium Served Rotating Double-Star Logo -->
+                <img alt="Servworx" class="w-16 h-16 animate-windrose filter drop-shadow(0 0 15px rgba(0, 242, 255, 0.4))" src="/logo.svg"/>
             </div>
             <div class="space-y-xs">
                 <h1 class="text-4xl text-on-surface"><span class="font-['Geist'] font-black uppercase tracking-[0.2em] scale-x-125 inline-block origin-left">LOGIN</span></h1>

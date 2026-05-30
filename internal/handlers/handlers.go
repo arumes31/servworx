@@ -188,6 +188,12 @@ func RegisterRoutes(mux *http.ServeMux) {
   </path>
 </svg>`)
 	})
+
+	// Logo Route serving our premium animated SVG
+	mux.HandleFunc("GET /logo.svg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		http.ServeFile(w, r, "logo.svg")
+	})
 }
 
 func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
