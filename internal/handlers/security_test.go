@@ -29,7 +29,10 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			}
 		]
 	}`)
-	os.WriteFile(cfgPath, cfgData, 0644)
+	err := os.WriteFile(cfgPath, cfgData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
 
 	tests := []struct {
 		name           string

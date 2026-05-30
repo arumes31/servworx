@@ -438,6 +438,10 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
+	enableWebhook := r.FormValue("enable_webhook") == "on"
+	enableTeams := r.FormValue("enable_teams") == "on"
+	enableTelegram := r.FormValue("enable_telegram") == "on"
+	enableEmail := r.FormValue("enable_email") == "on"
 
 	_ = config.UpdateConfig(func(c *config.Config) {
 		c.Services[idx].Name = newName
@@ -448,6 +452,10 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		c.Services[idx].GracePeriod = gracePeriod
 		c.Services[idx].AcceptedStatusCodes = codes
 		c.Services[idx].InsecureSkipVerify = insecureSkip
+		c.Services[idx].EnableWebhook = enableWebhook
+		c.Services[idx].EnableTeams = enableTeams
+		c.Services[idx].EnableTelegram = enableTelegram
+		c.Services[idx].EnableEmail = enableEmail
 	})
 
 	if oldName != newName {
@@ -650,6 +658,10 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 			AcceptedStatusCodes: []int{200},
 			Paused:              false,
 			InsecureSkipVerify:  false,
+			EnableWebhook:       false,
+			EnableTeams:         false,
+			EnableTelegram:      false,
+			EnableEmail:         false,
 		})
 	})
 

@@ -46,6 +46,10 @@ type ServiceConfig struct {
 	AcceptedStatusCodes []int  `json:"accepted_status_codes"`
 	Paused              bool   `json:"paused"`
 	InsecureSkipVerify  bool   `json:"insecure_skip_verify"`
+	EnableWebhook       bool   `json:"enable_webhook"`
+	EnableTeams         bool   `json:"enable_teams"`
+	EnableTelegram      bool   `json:"enable_telegram"`
+	EnableEmail         bool   `json:"enable_email"`
 }
 
 type Status struct {

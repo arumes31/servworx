@@ -524,6 +524,28 @@
                             <label for="insecure_{{ $i }}" style="margin:0;">Allow Insecure TLS (Self-Signed Certificates) <span class="tooltip-icon" data-tooltip="Skips verifying the TLS certificate chain when pinging the website URL. Useful for internal or self-signed domains.">?</span></label>
                         </div>
                         
+                        <div class="form-group full-width" style="margin-top: 0.5rem; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <label style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--primary);">🔔 Enable Notifications</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.25rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="webhook_{{ $i }}" name="enable_webhook" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableWebhook }}checked{{ end }}>
+                                    <label for="webhook_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">Generic Webhook</label>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="teams_{{ $i }}" name="enable_teams" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTeams }}checked{{ end }}>
+                                    <label for="teams_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">MS Teams</label>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="telegram_{{ $i }}" name="enable_telegram" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTelegram }}checked{{ end }}>
+                                    <label for="telegram_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">Telegram Bot</label>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="email_{{ $i }}" name="enable_email" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableEmail }}checked{{ end }}>
+                                    <label for="email_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">SMTP Email</label>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <p class="full-width" style="color: var(--text-muted); font-size: 0.85rem">
                             Time to Restart on Failure: <span id="ttr-{{$i}}">{{ if $status }}{{ $status.TimeToRestart }}{{ else }}Unknown{{ end }}</span>
                         </p>

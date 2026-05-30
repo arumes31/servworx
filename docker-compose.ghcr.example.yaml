@@ -4,7 +4,26 @@ services:
     image: ghcr.io/arumes31/servworx:latest
     ports:
       - "7676:5000"
+    environment:
+      # --- Webhook Notification ---
+      # - NOTIFICATION_WEBHOOK_URL=http://your-webhook-endpoint.local/alert
+      
+      # --- MS Teams Webhook ---
+      # - NOTIFICATION_MSTEAMS_URL=https://outlook.office.com/webhook/your-teams-endpoint
+      
+      # --- Telegram Bot Alerts ---
+      # - NOTIFICATION_TELEGRAM_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+      # - NOTIFICATION_TELEGRAM_CHAT_ID=-100123456789
+      
+      # --- SMTP Email Notifications ---
+      # - NOTIFICATION_SMTP_HOST=smtp.example.com
+      # - NOTIFICATION_SMTP_PORT=587
+      # - NOTIFICATION_SMTP_USER=sender@example.com
+      # - NOTIFICATION_SMTP_PASS=yoursecretpassword
+      # - NOTIFICATION_SMTP_FROM=servworx@example.com
+      # - NOTIFICATION_SMTP_TO=admin@example.com
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config:/app/config
     restart: unless-stopped
+

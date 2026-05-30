@@ -126,6 +126,16 @@ func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, str
 
 func restartContainers(containerNames, serviceName string) int64 {
 	LogAction("System", fmt.Sprintf("Restarting Docker containers for %s", serviceName), "error")
+
+	// Trigger self-healing restart notification if enabled
+	if cfg, err := config.LoadConfig(); err == nil {
+		for _, svc := range cfg.Services {
+			if svc.Name == serviceName {
+				SendNotification(svc, "Down", fmt.Sprintf("Auto-restart initiated for containers: %s", containerNames))
+				break
+			}
+		}
+	}
 	containers := strings.Split(containerNames, ",")
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
@@ -206,15 +216,29 @@ func updateServiceStatus(serviceName, status string) {
 
 				if status != oldStatusStr {
 					nowStr := time.Now().Format("2006-01-02 15:04:05")
+					var transitionMsg string
 					if status == "Down" && oldStatusStr == "Up" {
 						s.Services[i].DownSince = &nowStr
 						s.Services[i].UpSince = nil
 						s.Services[i].LastFailure = &nowStr
 						LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", serviceName, nowStr), "system")
+						transitionMsg = fmt.Sprintf("Service %s went Down! Integrity checks failed.", serviceName)
 					} else if status == "Up" && oldStatusStr == "Down" {
 						s.Services[i].UpSince = &nowStr
 						s.Services[i].DownSince = nil
 						LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", serviceName, nowStr), "system")
+						transitionMsg = fmt.Sprintf("Service %s recovered and is now Up.", serviceName)
+					}
+
+					if transitionMsg != "" {
+						if cfg, err := config.LoadConfig(); err == nil {
+							for _, svc := range cfg.Services {
+								if svc.Name == serviceName {
+									SendNotification(svc, status, transitionMsg)
+									break
+								}
+							}
+						}
 					}
 				}
 				s.Services[i].LastStableStatus = status

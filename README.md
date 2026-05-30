@@ -163,7 +163,11 @@ Below is an example of an operational configuration file:
             "grace_period": 300,
             "accepted_status_codes": [200, 201, 301, 302],
             "paused": false,
-            "insecure_skip_verify": true
+            "insecure_skip_verify": true,
+            "enable_webhook": false,
+            "enable_teams": true,
+            "enable_telegram": false,
+            "enable_email": true
         }
     ]
 }
@@ -182,6 +186,56 @@ Below is an example of an operational configuration file:
 | `accepted_status_codes` | `array` | `[200]` | List of HTTP status codes considered healthy and operational. |
 | `paused` | `bool` | `false` | Set to `true` to temporarily disable polling and auto-restarting for this service. |
 | `insecure_skip_verify` | `bool` | `false` | Skip SSL certificate validation (useful for internal DNS or self-signed certs). |
+| `enable_webhook` | `bool` | `false` | Set to `true` to enable Generic Webhook notification alerts for this service. |
+| `enable_teams` | `bool` | `false` | Set to `true` to enable Microsoft Teams webhook notification alerts for this service. |
+| `enable_telegram` | `bool` | `false` | Set to `true` to enable Telegram bot notification alerts for this service. |
+| `enable_email` | `bool` | `false` | Set to `true` to enable SMTP Email notification alerts for this service. |
+
+---
+
+### 🔔 Notification Setup
+
+`servworx` supports optional, multi-channel notifications (Generic Webhooks, MS Teams, Telegram, and SMTP Email) to alert you whenever a service's state changes (e.g., from `Up` to `Down`, or `Down` to `Up`) or when a container restart is triggered.
+
+Global notification settings (such as API tokens, endpoints, and credentials) are configured securely using **Docker container environment variables**. Once configured, each monitored service can selectively toggle channels on or off directly from the sleek settings panel on the web dashboard.
+
+> [!NOTE]
+> All notification channels are executed asynchronously inside high-performance Go goroutines. Slow endpoints, DNS resolutions, or SMTP handshakes will never block or delay your main health-checking threads.
+
+#### 1. Generic Webhook (`enable_webhook`)
+Sends a custom HTTP `POST` request with a JSON payload containing the event details.
+* **Environment Variable**: `NOTIFICATION_WEBHOOK_URL` (e.g., `http://your-webhook-endpoint.local/alert`)
+* **JSON Payload Format**:
+  ```json
+  {
+    "service": "Nginx Web Server",
+    "url": "https://my-website.local",
+    "status": "Down",
+    "timestamp": "2026-05-30 19:15:30",
+    "message": "Service status changed from Up to Down"
+  }
+  ```
+
+#### 2. Microsoft Teams (`enable_teams`)
+Dispatches rich, colored Office 365 Connector cards to Microsoft Teams or compatible endpoints.
+* **Environment Variable**: `NOTIFICATION_MSTEAMS_URL`
+* **Features**: Displays automatic color-coding (vibrant red for downtime, green for recovery) and custom emojis to display event urgency along with metadata on restarted containers.
+
+#### 3. Telegram Bot (`enable_telegram`)
+Sends beautifully formatted Markdown alerts directly to a specified personal chat, group, or channel.
+* **Environment Variables**:
+  * `NOTIFICATION_TELEGRAM_TOKEN`: The API token obtained from [@BotFather](https://t.me/BotFather).
+  * `NOTIFICATION_TELEGRAM_CHAT_ID`: The unique target chat or channel ID.
+
+#### 4. SMTP Email (`enable_email`)
+Sends standard plain-text e-mail notifications.
+* **Environment Variables**:
+  * `NOTIFICATION_SMTP_HOST`: The address of the outgoing mail server (e.g., `smtp.gmail.com`).
+  * `NOTIFICATION_SMTP_PORT`: The SMTP server port (usually `587` or `25`).
+  * `NOTIFICATION_SMTP_USER`: The authentication email address. *Leave blank for unauthenticated local homelab mail relays.*
+  * `NOTIFICATION_SMTP_PASS`: The password or app token for the SMTP server.
+  * `NOTIFICATION_SMTP_FROM`: The sender email address.
+  * `NOTIFICATION_SMTP_TO`: The destination email address.
 
 ---
 
