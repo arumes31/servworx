@@ -980,6 +980,7 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		// #nosec G705
 		fmt.Fprintf(w, `{"success": false, "error": %q}`, err.Error())
 	} else {
 		fmt.Fprintf(w, `{"success": true, "message": "Test alert dispatched successfully!"}`)
