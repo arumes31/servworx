@@ -108,6 +108,29 @@ func formatDuration(seconds int64) string {
 	return strings.Join(parts, ", ")
 }
 
+func enrichServiceStatus(svc config.ServiceConfig, s *config.ServiceStatus, currentTime int64) {
+	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+	if s.DownSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+		if err == nil {
+			df := formatDuration(currentTime - t.Unix())
+			s.DownFor = &df
+		} else {
+			errStr := "Invalid timestamp"
+			s.DownFor = &errStr
+		}
+	}
+	if s.UpSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+		if err == nil {
+			uf := formatDuration(currentTime - t.Unix())
+			s.UpFor = &uf
+		} else {
+			errStr := "Invalid timestamp"
+			s.UpFor = &errStr
+		}
+	}
+}
 
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -295,7 +318,6 @@ type ConfigViewData struct {
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
 
-
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	monitor.LogAction(username, "Accessed configuration page", "user")
@@ -308,28 +330,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			enrichServiceStatus(svc, &status.Services[i], currentTime)
 		}
 	}
 
@@ -603,7 +604,13 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
 
-	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
+	currentTime := time.Now().Unix()
+	for i, svcItem := range cfg.Services {
+		if i < len(status.Services) {
+			enrichServiceStatus(svcItem, &status.Services[i], currentTime)
+		}
+	}
+
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services: cfg.Services,
 		Status:   *status,
@@ -680,31 +687,9 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			enrichServiceStatus(svc, &status.Services[i], currentTime)
 		}
 	}
-
 
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
@@ -717,7 +702,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 			History:       history,
 		})
 	}
-
 
 	w.Header().Set("Content-Type", "application/json")
 	data := APIViewData{
@@ -773,7 +757,6 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
-
 
 	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)

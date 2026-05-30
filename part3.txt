@@ -1,0 +1,212 @@
+	monitor.LogAction(username, fmt.Sprintf("Retrieved logs for service: %s", svc.Name), "user")
+
+	cfg, _ = config.LoadConfig()
+	status, _ := config.LoadStatus()
+
+	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
+	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
+		Services: cfg.Services,
+		Status:   *status,
+		Logs:     logsBuilder.String(),
+		LogsSvc:  svc.Name,
+	})
+}
+
+func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.GetSession(r)
+	monitor.LogAction(username, "Received add service request", "user")
+
+	var newName string
+	_ = config.UpdateConfig(func(c *config.Config) {
+		newName = fmt.Sprintf("Service%d", len(c.Services)+1)
+		c.Services = append(c.Services, config.ServiceConfig{
+			Name:                newName,
+			WebsiteURL:          "http://example.com",
+			ContainerNames:      "",
+			Retries:             15,
+			Interval:            120,
+			GracePeriod:         3600,
+			AcceptedStatusCodes: []int{200},
+			Paused:              false,
+			InsecureSkipVerify:  false,
+		})
+	})
+
+	_ = config.UpdateStatus(func(s *config.Status) {
+		s.Services = append(s.Services, config.ServiceStatus{
+			Name:             newName,
+			Status:           "Unknown",
+			LastStableStatus: "Unknown",
+		})
+	})
+
+	monitor.LogAction(username, fmt.Sprintf("Added new service: %s", newName), "user")
+	monitor.LogAction("System", fmt.Sprintf("Initialized status for new service: %s", newName), "system")
+
+	monitor.RestartMonitoring()
+
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
+		return
+	}
+
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+// APIServiceStatus extends config.ServiceStatus with history for API responses
+type APIServiceStatus struct {
+	config.ServiceStatus
+	History []string `json:"history"`
+}
+
+// APIStatusResponse represents the structured status response for the API
+type APIStatusResponse struct {
+	Services []APIServiceStatus `json:"services"`
+}
+
+// APIViewData is the top-level structure for the API status response
+type APIViewData struct {
+	Services []config.ServiceConfig `json:"services"`
+	Status   APIStatusResponse      `json:"status"`
+}
+
+// JSON Endpoint for Status Fetching
+func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
+	cfg, _ := config.LoadConfig()
+	status, _ := config.LoadStatus()
+
+	currentTime := time.Now().Unix()
+
+	for i, svc := range cfg.Services {
+		if i < len(status.Services) {
+			s := &status.Services[i]
+			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+			if s.DownSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+				if err == nil {
+					df := formatDuration(currentTime - t.Unix())
+					s.DownFor = &df
+				} else {
+					errStr := "Invalid timestamp"
+					s.DownFor = &errStr
+				}
+			}
+			if s.UpSince != nil {
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+				if err == nil {
+					uf := formatDuration(currentTime - t.Unix())
+					s.UpFor = &uf
+				} else {
+					errStr := "Invalid timestamp"
+					s.UpFor = &errStr
+				}
+			}
+		}
+	}
+
+
+	apiStatus := APIStatusResponse{}
+	for i, s := range status.Services {
+		history := []string{}
+		if i < len(cfg.Services) {
+			history = monitor.GetHistory(cfg.Services[i].Name)
+		}
+		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
+			ServiceStatus: s,
+			History:       history,
+		})
+	}
+
+
+	w.Header().Set("Content-Type", "application/json")
+	data := APIViewData{
+		Services: cfg.Services,
+		Status:   apiStatus,
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err == nil {
+		_, _ = w.Write(jsonBytes)
+	} else {
+		http.Error(w, "Server error rendering JSON", http.StatusInternalServerError)
+	}
+}
+
+// JSON Endpoint for live streaming logs via SSE
+func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
+	idx, ok := parseIndex(w, r)
+	if !ok {
+		return
+	}
+
+	cfg, _ := config.LoadConfig()
+	if idx < 0 || idx >= len(cfg.Services) {
+		http.Error(w, "Invalid service index", http.StatusBadRequest)
+		return
+	}
+
+	svc := cfg.Services[idx]
+	containers := strings.Split(svc.ContainerNames, ",")
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	var targetContainer string
+	for _, c := range containers {
+		c = strings.TrimSpace(c)
+		if c != "" {
+			targetContainer = c
+			break
+		}
+	}
+
+	if targetContainer == "" {
+		fmt.Fprintf(w, "data: No valid containers found\n\n")
+		flusher.Flush()
+		return
+	}
+
+
+	// #nosec G204 G702
+	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
+		flusher.Flush()
+		return
+	}
+
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(w, "data: Error starting logs command\n\n")
+		flusher.Flush()
+		return
+	}
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := stdoutPipe.Read(buf)
+		if n > 0 {
+			lines := strings.Split(string(buf[:n]), "\n")
+			for _, line := range lines {
+				if line != "" {
+					fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
+				}
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			break
+		}
+	}
+	_ = cmd.Wait()
+}

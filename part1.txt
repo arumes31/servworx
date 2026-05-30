@@ -1,0 +1,300 @@
+package handlers
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"net/http"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/arumes31/servworx/internal/auth"
+	"github.com/arumes31/servworx/internal/config"
+	"github.com/arumes31/servworx/internal/monitor"
+)
+
+var templates *template.Template
+
+func InitTemplates(templateDir string) {
+	templates = template.Must(template.ParseGlob(filepath.Join(templateDir, "*.html")))
+}
+
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
+// checkPassword verifies a password against a stored hash.
+// It supports both bcrypt (Go) and SHA256 hex (legacy PHP) formats.
+// Returns true if the password matches.
+func checkPassword(password, storedHash string) bool {
+	// Bcrypt hashes always start with "$2a$", "$2b$", or "$2y$"
+	if strings.HasPrefix(storedHash, "$2") {
+		return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)) == nil
+	}
+
+	// Legacy SHA256 hex hash (64 character hex string)
+	if len(storedHash) == 64 {
+		sum := sha256.Sum256([]byte(password))
+		return hex.EncodeToString(sum[:]) == storedHash
+	}
+
+	return false
+}
+
+// migratePasswordToBcrypt re-hashes a legacy password with bcrypt and saves it.
+func migratePasswordToBcrypt(username, password string) {
+	newHash, err := hashPassword(password)
+	if err != nil {
+		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
+		return
+	}
+	_ = config.UpdateConfig(func(cfg *config.Config) {
+		cfg.Users[username] = newHash
+	})
+	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
+}
+
+// formatDuration matches Python's format_duration output closely
+func formatDuration(seconds int64) string {
+	if seconds <= 0 {
+		return "0 seconds"
+	}
+	days := seconds / (24 * 3600)
+	seconds %= (24 * 3600)
+	hours := seconds / 3600
+	seconds %= 3600
+	minutes := seconds / 60
+	seconds %= 60
+
+	var parts []string
+	if days > 0 {
+		s := ""
+		if days != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d day%s", days, s))
+	}
+	if hours > 0 {
+		s := ""
+		if hours != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d hour%s", hours, s))
+	}
+	if minutes > 0 {
+		s := ""
+		if minutes != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d minute%s", minutes, s))
+	}
+
+	if seconds > 0 || len(parts) == 0 {
+		s := ""
+		if seconds != 1 {
+			s = "s"
+		}
+		parts = append(parts, fmt.Sprintf("%d second%s", seconds, s))
+	}
+	return strings.Join(parts, ", ")
+}
+
+
+// requireAuth is a middleware to enforce authentication
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username, ok := auth.GetSession(r)
+		if !ok {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		// Ensure admin has changed default password
+		if username == "admin" && r.URL.Path != "/change_password" && r.URL.Path != "/logout" {
+			cfg, err := config.LoadConfig()
+			if err == nil {
+				if checkPassword("changeme", cfg.Users["admin"]) {
+					http.Redirect(w, r, "/change_password", http.StatusSeeOther)
+					return
+				}
+			}
+		}
+
+		// Store user in context or just let handlers get it from session wrapper if needed
+		next(w, r)
+	}
+}
+
+func RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		if _, ok := auth.GetSession(r); !ok {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/config", http.StatusSeeOther)
+	})
+
+	mux.HandleFunc("GET /login", HandleLoginGET)
+	mux.HandleFunc("POST /login", HandleLoginPOST)
+	mux.HandleFunc("GET /logout", requireAuth(HandleLogout))
+	mux.HandleFunc("GET /change_password", requireAuth(HandleChangePasswordGET))
+	mux.HandleFunc("POST /change_password", requireAuth(HandleChangePasswordPOST))
+	mux.HandleFunc("GET /config", requireAuth(HandleConfigGET))
+	mux.HandleFunc("POST /update_service/{index}", requireAuth(HandleUpdateServicePOST))
+	mux.HandleFunc("POST /add_service", requireAuth(HandleAddServicePOST))
+	mux.HandleFunc("POST /force_restart/{index}", requireAuth(HandleForceRestartPOST))
+	mux.HandleFunc("POST /pause_monitoring/{index}", requireAuth(HandlePauseMonitoringPOST))
+	mux.HandleFunc("GET /view_logs/{index}", requireAuth(HandleViewLogsGET))
+
+	// JSON / AJAX UX Endpoints
+	mux.HandleFunc("GET /api/status", requireAuth(HandleAPIStatusGET))
+	mux.HandleFunc("GET /api/logs/stream/{index}", requireAuth(HandleAPILogsStreamGET))
+}
+
+func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
+	if _, ok := auth.GetSession(r); ok {
+		http.Redirect(w, r, "/config", http.StatusSeeOther)
+		return
+	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+		"IsSecure": isSecure,
+	})
+}
+
+func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	if !isSecure {
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
+			"error":    "Login is only possible over a secure (HTTPS) connection.",
+			"IsSecure": false,
+		})
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "System error loading config"})
+		return
+	}
+
+	storedHash, exists := cfg.Users[username]
+	if !exists {
+		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
+		return
+	}
+
+	if !checkPassword(password, storedHash) {
+		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
+		return
+	}
+
+	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
+	if !strings.HasPrefix(storedHash, "$2") {
+		migratePasswordToBcrypt(username, password)
+	}
+
+	// Login successful
+	sessionID := auth.CreateSession(username)
+	auth.SetSessionCookie(w, sessionID)
+	monitor.LogAction(username, "Logged in", "user")
+
+	if username == "admin" {
+		if checkPassword("changeme", storedHash) {
+			http.Redirect(w, r, "/change_password", http.StatusSeeOther)
+			return
+		}
+	}
+
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+func HandleLogout(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.GetSession(r)
+	auth.DestroySession(w, r)
+	monitor.LogAction(username, "Logged out", "user")
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func HandleChangePasswordGET(w http.ResponseWriter, r *http.Request) {
+	_ = templates.ExecuteTemplate(w, "change_password.html", nil)
+}
+
+func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	username, _ := auth.GetSession(r)
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	if newPassword != confirmPassword {
+		monitor.LogAction(username, "Failed password change (passwords do not match)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Passwords do not match"})
+		return
+	}
+
+	if len(newPassword) < 8 {
+		monitor.LogAction(username, "Failed password change (weak password)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Password must be at least 8 characters long"})
+		return
+	}
+
+	hashed, err := hashPassword(newPassword)
+	if err != nil {
+		monitor.LogAction(username, "Failed password change (hashing error)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "System error processing password"})
+		return
+	}
+
+	err = config.UpdateConfig(func(cfg *config.Config) {
+		cfg.Users[username] = hashed
+	})
+
+	if err != nil {
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Failed to save new password"})
+		return
+	}
+
+	monitor.LogAction(username, "Changed password", "user")
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+type ConfigViewData struct {
+	Services []config.ServiceConfig `json:"services"`
+	Status   config.Status          `json:"status"`
+	Error    string                 `json:"error,omitempty"`
+	Logs     string                 `json:"logs,omitempty"`
+	LogsSvc  string                 `json:"logs_svc,omitempty"`
+}
+
+
+func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.GetSession(r)
