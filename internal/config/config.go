@@ -55,6 +55,12 @@ type ServiceConfig struct {
 	AlertOnRestart      bool   `json:"alert_on_restart"`
 	AlertRepeatInterval int    `json:"alert_repeat_interval"`
 	AlertMaxRepeats     int    `json:"alert_max_repeats"`
+	EnableDiscord       bool   `json:"enable_discord"`
+	EnableGotify        bool   `json:"enable_gotify"`
+	EnablePushover      bool   `json:"enable_pushover"`
+	QuietHoursStart     string `json:"quiet_hours_start"`
+	QuietHoursEnd       string `json:"quiet_hours_end"`
+	AlertSnoozeUntil    int64  `json:"alert_snooze_until"`
 }
 
 // UnmarshalJSON implements a custom JSON unmarshaller to ensure new boolean settings default to true for backward compatibility.

@@ -17,8 +17,30 @@ import (
 	"github.com/arumes31/servworx/internal/config"
 )
 
+// isQuietHours checks if the current time falls inside the configured start and end hour range.
+func isQuietHours(start, end string) bool {
+	if start == "" || end == "" {
+		return false
+	}
+	nowHM := time.Now().Format("15:04")
+	if start < end {
+		return nowHM >= start && nowHM <= end
+	}
+	return nowHM >= start || nowHM <= end
+}
+
 // SendNotification dispatches asynchronous alerts over enabled channels on status transitions
 func SendNotification(svc config.ServiceConfig, status string, detailMessage string) {
+	// Execute Quiet Hours and Snooze checks
+	if svc.AlertSnoozeUntil > time.Now().Unix() {
+		LogAction("System", fmt.Sprintf("Alerts for service %s are currently snoozed. Skipping notification.", svc.Name), "system")
+		return
+	}
+	if isQuietHours(svc.QuietHoursStart, svc.QuietHoursEnd) {
+		LogAction("System", fmt.Sprintf("Alerts for service %s are in Quiet Hours (%s to %s). Skipping notification.", svc.Name, svc.QuietHoursStart, svc.QuietHoursEnd), "system")
+		return
+	}
+
 	// Execute asynchronously in a goroutine so it never blocks the health check loop
 	go func() {
 		LogAction("System", fmt.Sprintf("Dispatching %s status alerts for service %s...", status, svc.Name), "system")
@@ -52,6 +74,30 @@ func SendNotification(svc config.ServiceConfig, status string, detailMessage str
 				LogAction("System", fmt.Sprintf("Email alert failed for %s: %v", svc.Name, err), "error")
 			} else {
 				LogAction("System", fmt.Sprintf("Email alert successfully sent for %s", svc.Name), "system")
+			}
+		}
+
+		if svc.EnableDiscord {
+			if err := sendDiscord(svc, status, detailMessage); err != nil {
+				LogAction("System", fmt.Sprintf("Discord alert failed for %s: %v", svc.Name, err), "error")
+			} else {
+				LogAction("System", fmt.Sprintf("Discord alert successfully sent for %s", svc.Name), "system")
+			}
+		}
+
+		if svc.EnableGotify {
+			if err := sendGotify(svc, status, detailMessage); err != nil {
+				LogAction("System", fmt.Sprintf("Gotify alert failed for %s: %v", svc.Name, err), "error")
+			} else {
+				LogAction("System", fmt.Sprintf("Gotify alert successfully sent for %s", svc.Name), "system")
+			}
+		}
+
+		if svc.EnablePushover {
+			if err := sendPushover(svc, status, detailMessage); err != nil {
+				LogAction("System", fmt.Sprintf("Pushover alert failed for %s: %v", svc.Name, err), "error")
+			} else {
+				LogAction("System", fmt.Sprintf("Pushover alert successfully sent for %s", svc.Name), "system")
 			}
 		}
 	}()
@@ -255,4 +301,161 @@ func sendEmail(svc config.ServiceConfig, status string, detail string) error {
 	}
 
 	return nil
+}
+
+func sendDiscord(svc config.ServiceConfig, status string, detail string) error {
+	discordURL := os.Getenv("NOTIFICATION_DISCORD_URL")
+	if discordURL == "" {
+		return fmt.Errorf("NOTIFICATION_DISCORD_URL is not configured in environment")
+	}
+
+	color := 16711680 // Red for Down
+	emoji := "🚨"
+	if status == "Up" {
+		color = 65280 // Green for Up
+		emoji = "✅"
+	}
+
+	payload := map[string]interface{}{
+		"embeds": []map[string]interface{}{
+			{
+				"title":       fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+				"description": fmt.Sprintf("Service **%s** (%s) status changed to **%s**.\n\n**Detail:** %s\n**Containers:** `%s`",
+					svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
+				"color":     color,
+				"timestamp": time.Now().Format(time.RFC3339),
+			},
+		},
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	// #nosec G107 G704
+	req, err := http.NewRequest("POST", discordURL, bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// #nosec G704
+	resp, err := defaultHttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("discord responded with non-2xx status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func sendGotify(svc config.ServiceConfig, status string, detail string) error {
+	gotifyURL := os.Getenv("NOTIFICATION_GOTIFY_URL")
+	token := os.Getenv("NOTIFICATION_GOTIFY_TOKEN")
+	if gotifyURL == "" || token == "" {
+		return fmt.Errorf("NOTIFICATION_GOTIFY_URL or NOTIFICATION_GOTIFY_TOKEN is not configured in environment")
+	}
+
+	gotifyURL = strings.TrimRight(gotifyURL, "/")
+	apiURL := fmt.Sprintf("%s/message?token=%s", gotifyURL, token)
+
+	emoji := "🚨"
+	priority := 8
+	if status == "Up" {
+		emoji = "✅"
+		priority = 5
+	}
+
+	payload := map[string]interface{}{
+		"title":    fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+		"message":  fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s",
+			svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
+		"priority": priority,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	// #nosec G107 G704
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// #nosec G704
+	resp, err := defaultHttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("gotify responded with non-2xx status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func sendPushover(svc config.ServiceConfig, status string, detail string) error {
+	token := os.Getenv("NOTIFICATION_PUSHOVER_TOKEN")
+	user := os.Getenv("NOTIFICATION_PUSHOVER_USER")
+	if token == "" || user == "" {
+		return fmt.Errorf("NOTIFICATION_PUSHOVER_TOKEN or NOTIFICATION_PUSHOVER_USER is not configured in environment")
+	}
+
+	emoji := "🚨"
+	priority := "1"
+	if status == "Up" {
+		emoji = "✅"
+		priority = "0"
+	}
+
+	form := url.Values{}
+	form.Set("token", token)
+	form.Set("user", user)
+	form.Set("title", fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status))
+	form.Set("message", fmt.Sprintf("Service: %s (%s) is now %s.\n\nDetail: %s\nContainers: %s",
+		svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames))
+	form.Set("priority", priority)
+
+	// #nosec G704
+	resp, err := defaultHttpClient.PostForm("https://api.pushover.net/1/messages.json", form)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("pushover responded with non-2xx status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// SendTestNotification triggers a single diagnostic test notification over a specific provider.
+func SendTestNotification(svc config.ServiceConfig, provider string) error {
+	detailMessage := "This is a diagnostic test alert sent from your servworx configuration dashboard. Your notification channel is working correctly!"
+	switch provider {
+	case "webhook":
+		return sendWebhook(svc, "Test", detailMessage)
+	case "teams":
+		return sendTeams(svc, "Test", detailMessage)
+	case "telegram":
+		return sendTelegram(svc, "Test", detailMessage)
+	case "email":
+		return sendEmail(svc, "Test", detailMessage)
+	case "discord":
+		return sendDiscord(svc, "Test", detailMessage)
+	case "gotify":
+		return sendGotify(svc, "Test", detailMessage)
+	case "pushover":
+		return sendPushover(svc, "Test", detailMessage)
+	default:
+		return fmt.Errorf("unknown notification provider: %s", provider)
+	}
 }

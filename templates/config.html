@@ -529,22 +529,118 @@
                         
                         <div class="form-group full-width" style="margin-top: 0.5rem; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
                             <label style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--primary);">🔔 Enable Notifications</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.25rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="webhook_{{ $i }}" name="enable_webhook" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableWebhook }}checked{{ end }} {{ if not $.NotificationProviders.webhook }}disabled{{ end }}>
-                                    <label for="webhook_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.webhook }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Generic Webhook {{ if not $.NotificationProviders.webhook }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; font-size: 0.85rem; margin-top: 0.25rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="webhook_{{ $i }}" name="enable_webhook" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableWebhook }}checked{{ end }} {{ if not $.NotificationProviders.webhook }}disabled{{ end }}>
+                                        <label for="webhook_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.webhook }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Generic Webhook {{ if not $.NotificationProviders.webhook }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.webhook }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'webhook')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="teams_{{ $i }}" name="enable_teams" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTeams }}checked{{ end }} {{ if not $.NotificationProviders.teams }}disabled{{ end }}>
-                                    <label for="teams_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.teams }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">MS Teams {{ if not $.NotificationProviders.teams }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="teams_{{ $i }}" name="enable_teams" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTeams }}checked{{ end }} {{ if not $.NotificationProviders.teams }}disabled{{ end }}>
+                                        <label for="teams_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.teams }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">MS Teams {{ if not $.NotificationProviders.teams }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.teams }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'teams')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="telegram_{{ $i }}" name="enable_telegram" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTelegram }}checked{{ end }} {{ if not $.NotificationProviders.telegram }}disabled{{ end }}>
-                                    <label for="telegram_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.telegram }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Telegram Bot {{ if not $.NotificationProviders.telegram }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="telegram_{{ $i }}" name="enable_telegram" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTelegram }}checked{{ end }} {{ if not $.NotificationProviders.telegram }}disabled{{ end }}>
+                                        <label for="telegram_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.telegram }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Telegram Bot {{ if not $.NotificationProviders.telegram }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.telegram }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'telegram')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="email_{{ $i }}" name="enable_email" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableEmail }}checked{{ end }} {{ if not $.NotificationProviders.email }}disabled{{ end }}>
-                                    <label for="email_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.email }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">SMTP Email {{ if not $.NotificationProviders.email }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="email_{{ $i }}" name="enable_email" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableEmail }}checked{{ end }} {{ if not $.NotificationProviders.email }}disabled{{ end }}>
+                                        <label for="email_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.email }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">SMTP Email {{ if not $.NotificationProviders.email }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.email }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'email')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="discord_{{ $i }}" name="enable_discord" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableDiscord }}checked{{ end }} {{ if not $.NotificationProviders.discord }}disabled{{ end }}>
+                                        <label for="discord_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.discord }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Discord Webhook {{ if not $.NotificationProviders.discord }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.discord }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'discord')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="gotify_{{ $i }}" name="enable_gotify" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableGotify }}checked{{ end }} {{ if not $.NotificationProviders.gotify }}disabled{{ end }}>
+                                        <label for="gotify_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.gotify }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Gotify App {{ if not $.NotificationProviders.gotify }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.gotify }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'gotify')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="pushover_{{ $i }}" name="enable_pushover" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnablePushover }}checked{{ end }} {{ if not $.NotificationProviders.pushover }}disabled{{ end }}>
+                                        <label for="pushover_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.pushover }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Pushover App {{ if not $.NotificationProviders.pushover }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
+                                    </div>
+                                    {{ if $.NotificationProviders.pushover }}
+                                    <button type="button" onclick="testNotification('{{ $i }}', 'pushover')" class="btn btn-outline" style="padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--primary); transition: all 0.2s;" title="Send Test Alert">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                    </button>
+                                    {{ end }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group full-width" style="margin-top: 0.5rem; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <label style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--primary);">⏰ Quiet Hours & Snooze Schedule</label>
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.85rem; margin-top: 0.25rem;">
+                                <!-- Quiet Hours Range -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.75rem;">
+                                    <div class="form-group">
+                                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Quiet Hours Start <span class="tooltip-icon" data-tooltip="Starting hour (HH:MM) to silence alerts. Leave blank to disable.">?</span></label>
+                                        <input type="time" name="quiet_hours_start" value="{{ $service.QuietHoursStart }}" style="padding: 0.4rem; font-size: 0.85rem;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Quiet Hours End <span class="tooltip-icon" data-tooltip="Ending hour (HH:MM) to silence alerts. Leave blank to disable.">?</span></label>
+                                        <input type="time" name="quiet_hours_end" value="{{ $service.QuietHoursEnd }}" style="padding: 0.4rem; font-size: 0.85rem;">
+                                    </div>
+                                </div>
+                                <!-- Active Snooze Controls -->
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    <label style="font-size: 0.8rem; font-weight: 600;">Snooze Alerts Silently <span class="tooltip-icon" data-tooltip="Instantly silence all alerting channels for a set duration.">?</span></label>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                                        <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onclick="snoozeAlerts('{{ $i }}', 60)">1 Hour</button>
+                                        <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onclick="snoozeAlerts('{{ $i }}', 240)">4 Hours</button>
+                                        <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onclick="snoozeAlerts('{{ $i }}', 480)">8 Hours</button>
+                                        <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onclick="snoozeAlerts('{{ $i }}', 1440)">24 Hours</button>
+                                        <button type="button" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onclick="snoozeAlerts('{{ $i }}', 0)">Reset</button>
+                                    </div>
+                                    <div id="snooze-status-{{ $i }}" style="font-size: 0.8rem; font-weight: bold; margin-top: 0.25rem;">
+                                        {{ if gt $service.AlertSnoozeUntil 0 }}
+                                            <span style="color: var(--warning);">🔔 Snoozed until: <span class="snooze-time-val" data-unix="{{ $service.AlertSnoozeUntil }}">...</span></span>
+                                        {{ else }}
+                                            <span style="color: var(--success);">🟢 Alerts actively enabled</span>
+                                        {{ end }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -946,9 +1042,84 @@
                 .catch(err => console.error("Poll error", err));
         }
 
+        function formatSnoozeTimes() {
+            const els = document.querySelectorAll('.snooze-time-val');
+            els.forEach(el => {
+                const unix = parseInt(el.getAttribute('data-unix'), 10);
+                if (unix > 0) {
+                    const date = new Date(unix * 1000);
+                    el.textContent = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " (" + date.toLocaleDateString() + ")";
+                }
+            });
+        }
+
+        function snoozeAlerts(index, durationMins) {
+            const params = new URLSearchParams();
+            params.append("duration", durationMins);
+
+            fetch(`/api/snooze/${index}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: params.toString()
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, "success");
+                    const statusEl = document.getElementById('snooze-status-' + index);
+                    if (statusEl) {
+                        if (durationMins > 0) {
+                            const snoozeUntil = Math.floor(Date.now() / 1000) + (durationMins * 60);
+                            statusEl.innerHTML = `<span style="color: var(--warning);">🔔 Snoozed until: <span class="snooze-time-val" data-unix="${snoozeUntil}">...</span></span>`;
+                        } else {
+                            statusEl.innerHTML = `<span style="color: var(--success);">🟢 Alerts actively enabled</span>`;
+                        }
+                        formatSnoozeTimes();
+                    }
+                } else {
+                    showToast(data.error || "Failed to snooze alerts", "error");
+                }
+            })
+            .catch(err => showToast("Network error: " + err, "error"));
+        }
+
+        function testNotification(index, provider) {
+            showToast("Sending test " + provider + " alert...", "success");
+            const params = new URLSearchParams();
+            params.append("index", index);
+            params.append("provider", provider);
+
+            fetch('/api/notifications/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: params.toString()
+            })
+            .then(res => {
+                if (res.ok) {
+                    return res.json().then(data => {
+                        showToast(data.message || "Test alert sent successfully!", "success");
+                    });
+                } else {
+                    return res.json().then(data => {
+                        showToast(data.error || "Failed to send test alert", "error");
+                    }).catch(() => {
+                        showToast("Error sending test notification", "error");
+                    });
+                }
+            })
+            .catch(err => showToast("Network error: " + err, "error"));
+        }
+
         // Initial Data render on load (the template injects the state on first load, but we want proper sparklines)
         document.addEventListener("DOMContentLoaded", () => {
             fetchStatus(); 
+            formatSnoozeTimes();
             // Start routine polling every 5s
             setInterval(fetchStatus, 5000);
         });

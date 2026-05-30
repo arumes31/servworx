@@ -168,6 +168,8 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// JSON / AJAX UX Endpoints
 	mux.HandleFunc("GET /api/status", requireAuth(HandleAPIStatusGET))
 	mux.HandleFunc("GET /api/logs/stream/{index}", requireAuth(HandleAPILogsStreamGET))
+	mux.HandleFunc("POST /api/notifications/test", requireAuth(HandleAPINotificationTestPOST))
+	mux.HandleFunc("POST /api/snooze/{index}", requireAuth(HandleAPISnoozePOST))
 
 	// Favicon Route serving our premium animated SVG
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -342,6 +344,9 @@ func getNotificationProviders() map[string]bool {
 		"teams":    os.Getenv("NOTIFICATION_MSTEAMS_URL") != "",
 		"telegram": os.Getenv("NOTIFICATION_TELEGRAM_TOKEN") != "" && os.Getenv("NOTIFICATION_TELEGRAM_CHAT_ID") != "",
 		"email":    os.Getenv("NOTIFICATION_SMTP_HOST") != "" && os.Getenv("NOTIFICATION_SMTP_PORT") != "" && os.Getenv("NOTIFICATION_SMTP_FROM") != "" && os.Getenv("NOTIFICATION_SMTP_TO") != "",
+		"discord":  os.Getenv("NOTIFICATION_DISCORD_URL") != "",
+		"gotify":   os.Getenv("NOTIFICATION_GOTIFY_URL") != "" && os.Getenv("NOTIFICATION_GOTIFY_TOKEN") != "",
+		"pushover": os.Getenv("NOTIFICATION_PUSHOVER_TOKEN") != "" && os.Getenv("NOTIFICATION_PUSHOVER_USER") != "",
 	}
 }
 
@@ -497,10 +502,16 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
 	enableTelegram := r.FormValue("enable_telegram") == "on" && providers["telegram"]
 	enableEmail := r.FormValue("enable_email") == "on" && providers["email"]
+	enableDiscord := r.FormValue("enable_discord") == "on" && providers["discord"]
+	enableGotify := r.FormValue("enable_gotify") == "on" && providers["gotify"]
+	enablePushover := r.FormValue("enable_pushover") == "on" && providers["pushover"]
 
 	alertOnFailure := r.FormValue("alert_on_failure") == "on"
 	alertOnRecovery := r.FormValue("alert_on_recovery") == "on"
 	alertOnRestart := r.FormValue("alert_on_restart") == "on"
+
+	quietHoursStart := r.FormValue("quiet_hours_start")
+	quietHoursEnd := r.FormValue("quiet_hours_end")
 
 	// Convert repeat interval from minutes (input in UI) to seconds
 	repeatIntervalMin, _ := strconv.Atoi(r.FormValue("alert_repeat_interval"))
@@ -527,6 +538,11 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		c.Services[idx].EnableTeams = enableTeams
 		c.Services[idx].EnableTelegram = enableTelegram
 		c.Services[idx].EnableEmail = enableEmail
+		c.Services[idx].EnableDiscord = enableDiscord
+		c.Services[idx].EnableGotify = enableGotify
+		c.Services[idx].EnablePushover = enablePushover
+		c.Services[idx].QuietHoursStart = quietHoursStart
+		c.Services[idx].QuietHoursEnd = quietHoursEnd
 		c.Services[idx].AlertOnFailure = alertOnFailure
 		c.Services[idx].AlertOnRecovery = alertOnRecovery
 		c.Services[idx].AlertOnRestart = alertOnRestart
@@ -927,4 +943,93 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = cmd.Wait()
+}
+
+func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	_ = r.ParseForm()
+
+	idxStr := r.FormValue("index")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"success": false, "error": "Invalid service index"}`)
+		return
+	}
+
+	provider := r.FormValue("provider")
+	if provider == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"success": false, "error": "Provider not specified"}`)
+		return
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil || idx < 0 || idx >= len(cfg.Services) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"success": false, "error": "Service not found"}`)
+		return
+	}
+
+	svc := cfg.Services[idx]
+
+	err = monitor.SendTestNotification(svc, provider)
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"success": false, "error": %q}`, err.Error())
+	} else {
+		fmt.Fprintf(w, `{"success": true, "message": "Test alert dispatched successfully!"}`)
+	}
+}
+
+func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	_ = r.ParseForm()
+
+	username, _ := auth.GetSession(r)
+	idx, ok := parseIndex(w, r)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"success": false, "error": "Invalid index"}`)
+		return
+	}
+
+	durationStr := r.FormValue("duration")
+	durationMins, err := strconv.Atoi(durationStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"success": false, "error": "Invalid duration"}`)
+		return
+	}
+
+	var snoozeUntil int64
+	if durationMins > 0 {
+		snoozeUntil = time.Now().Unix() + int64(durationMins*60)
+	} else {
+		snoozeUntil = 0
+	}
+
+	var svcName string
+	_ = config.UpdateConfig(func(c *config.Config) {
+		if idx >= 0 && idx < len(c.Services) {
+			c.Services[idx].AlertSnoozeUntil = snoozeUntil
+			svcName = c.Services[idx].Name
+		}
+	})
+
+	action := "Alerts snoozed"
+	if snoozeUntil == 0 {
+		action = "Alerts unsnoozed"
+	}
+	monitor.LogAction(username, fmt.Sprintf("%s for service %s", action, svcName), "user")
+	monitor.RestartMonitoring()
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"success": true, "message": %q}`, action)
 }
