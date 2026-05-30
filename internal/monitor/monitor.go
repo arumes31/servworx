@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,8 +23,8 @@ var (
 	wg       sync.WaitGroup
 
 	// In-memory health check history (not persisted to disk)
-	healthHistory   = make(map[string][]string)
-	historyMutex    sync.RWMutex
+	healthHistory = make(map[string][]string)
+	historyMutex  sync.RWMutex
 
 	// color codes
 	colorGreen  = "\033[92m"
@@ -130,7 +130,7 @@ func restartContainers(containerNames, serviceName string) int64 {
 			continue
 		}
 		fmt.Printf("Executing 'docker restart %s'\n", c)
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		// #nosec G204
 		cmd := exec.CommandContext(ctx, "docker", "restart", c)
@@ -244,7 +244,7 @@ func monitorService(svc config.ServiceConfig) {
 						if oldStatusStr == "" {
 							oldStatusStr = s.Services[j].Status
 						}
-						
+
 						newStatus := "Down"
 						if success {
 							newStatus = "Up"
@@ -283,7 +283,7 @@ func monitorService(svc config.ServiceConfig) {
 				break
 			} else if i < currentSvc.Retries {
 				fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", currentSvc.Name, i, currentSvc.Retries, currentSvc.Interval)
-				
+
 				select {
 				case <-time.After(time.Duration(currentSvc.Interval) * time.Second):
 					// waited
@@ -319,7 +319,7 @@ func StartMonitoring() {
 		log.Printf("Failed to load config for monitoring: %v", err)
 		return
 	}
-	
+
 	// Rebuild status.json to match config.json order
 	_ = config.UpdateStatus(func(s *config.Status) {
 		var newStatus []config.ServiceStatus

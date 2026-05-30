@@ -68,6 +68,18 @@ func main() {
 func initDefaultFiles() error {
 	_ = os.MkdirAll(config.ConfigDir, 0750)
 
+	if err := initConfig(); err != nil {
+		return err
+	}
+
+	if err := initStatus(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initConfig() error {
 	_, err := config.LoadConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -95,8 +107,11 @@ func initDefaultFiles() error {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 	}
+	return nil
+}
 
-	_, err = config.LoadStatus()
+func initStatus() error {
+	_, err := config.LoadStatus()
 	if err != nil {
 		if os.IsNotExist(err) {
 			defaultStatus := &config.Status{
@@ -115,6 +130,5 @@ func initDefaultFiles() error {
 			return fmt.Errorf("failed to load status: %w", err)
 		}
 	}
-
 	return nil
 }
