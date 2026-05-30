@@ -160,6 +160,46 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// JSON / AJAX UX Endpoints
 	mux.HandleFunc("GET /api/status", requireAuth(HandleAPIStatusGET))
 	mux.HandleFunc("GET /api/logs/stream/{index}", requireAuth(HandleAPILogsStreamGET))
+
+	// Favicon Route serving our premium animated SVG
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		fmt.Fprint(w, `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <filter id="glow-magenta" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7"/>
+            <stop offset="100%" stop-color="#ec4899"/>
+        </linearGradient>
+        <linearGradient id="gradient-secondary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#06b6d4"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+        </linearGradient>
+    </defs>
+    <style>
+        @keyframes gear-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .gear-rotation { transform-origin: 100px 100px; animation: gear-spin 15s linear infinite; }
+    </style>
+    <path d="M100,35 L106,94 H165 L106,106 V165 L94,106 H35 L94,94 Z" fill="none" stroke="url(#gradient-primary)" stroke-width="3" filter="url(#glow-magenta)"/>
+    <g class="gear-rotation">
+        <circle cx="100" cy="100" r="45" fill="none" stroke="url(#gradient-secondary)" stroke-width="2" stroke-dasharray="5 15" filter="url(#glow-cyan)"/>
+    </g>
+    <circle cx="100" cy="100" r="6" fill="#ec4899" filter="url(#glow-magenta)"/>
+</svg>`)
+	})
 }
 
 func HandleLoginGET(w http.ResponseWriter, r *http.Request) {

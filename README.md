@@ -2,6 +2,51 @@
 
 <div align="center">
 
+<!-- Premium Animated servworx SVG (Compass: Wind Rose Star) -->
+<svg viewBox="0 0 200 200" width="120" height="120" style="margin: 0.5rem auto 1.5rem; display: block; filter: drop-shadow(0 0 15px rgba(168,85,247,0.35));">
+    <defs>
+        <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <filter id="glow-magenta" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <filter id="glow-accent" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7"/>
+            <stop offset="100%" stop-color="#ec4899"/>
+        </linearGradient>
+        <linearGradient id="gradient-secondary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#06b6d4"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+        </linearGradient>
+    </defs>
+    <style>
+        @keyframes flow { to { stroke-dashoffset: 0; } }
+        @keyframes gear-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .gear-rotation { transform-origin: 100px 100px; animation: gear-spin 15s linear infinite; }
+    </style>
+    <path d="M100,35 L106,94 H165 L106,106 V165 L94,106 H35 L94,94 Z" fill="none" stroke="url(#gradient-primary)" stroke-width="3" filter="url(#glow-magenta)"/>
+    <g class="gear-rotation">
+        <circle cx="100" cy="100" r="45" fill="none" stroke="url(#gradient-secondary)" stroke-width="2" stroke-dasharray="5 15" filter="url(#glow-cyan)"/>
+    </g>
+    <circle cx="100" cy="100" r="6" fill="#ec4899" filter="url(#glow-accent)"/>
+</svg>
+
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
 ![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
 ![Go Version](https://img.shields.io/badge/Go-1.26.1+-00ADD8.svg?style=flat-square&logo=go&logoColor=white)
