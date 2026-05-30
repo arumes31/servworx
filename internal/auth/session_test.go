@@ -106,39 +106,56 @@ func TestDestroySession(t *testing.T) {
 	username := "testuser"
 	sessionID := CreateSession(username)
 
-	req := httptest.NewRequest("POST", "/logout", nil)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
-	w := httptest.NewRecorder()
+	t.Run("Valid session", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/logout", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+		w := httptest.NewRecorder()
 
-	DestroySession(w, req)
+		DestroySession(w, req)
 
-	mutex.RLock()
-	_, ok := sessions[sessionID]
-	mutex.RUnlock()
+		mutex.RLock()
+		_, ok := sessions[sessionID]
+		mutex.RUnlock()
 
-	if ok {
-		t.Error("Session still exists in map after DestroySession")
-	}
-
-	resp := w.Result()
-	cookies := resp.Cookies()
-	var found bool
-	for _, c := range cookies {
-		if c.Name == "session_id" {
-			found = true
-			if c.Value != "" {
-				t.Errorf("Expected empty cookie value, got %s", c.Value)
-			}
-			// Expires is set to Unix(0, 0), which means it's definitely in the past.
-			if !c.Expires.Before(time.Now()) {
-				t.Errorf("Expected expired cookie, got expiry %v", c.Expires)
-			}
-			break
+		if ok {
+			t.Error("Session still exists in map after DestroySession")
 		}
-	}
-	if !found {
-		t.Error("Session cookie not cleared in response")
-	}
+
+		resp := w.Result()
+		cookies := resp.Cookies()
+		var found bool
+		for _, c := range cookies {
+			if c.Name == "session_id" {
+				found = true
+				if c.Value != "" {
+					t.Errorf("Expected empty cookie value, got %s", c.Value)
+				}
+				if !c.Expires.Before(time.Now()) {
+					t.Errorf("Expected expired cookie, got expiry %v", c.Expires)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Error("Session cookie not cleared in response")
+		}
+	})
+
+	t.Run("Missing cookie", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/logout", nil)
+		w := httptest.NewRecorder()
+
+		// This should return early without doing anything
+		DestroySession(w, req)
+
+		resp := w.Result()
+		cookies := resp.Cookies()
+		for _, c := range cookies {
+			if c.Name == "session_id" {
+				t.Error("Session cookie should not be set/cleared if it was missing")
+			}
+		}
+	})
 }
 
 func TestSetSessionCookie(t *testing.T) {
