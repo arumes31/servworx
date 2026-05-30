@@ -401,62 +401,29 @@
     <div class="toast-container" id="toast-container"></div>
 
     <div class="container">
-        <!-- Premium Animated servworx SVG (Compass: Wind Rose Star) -->
-        <svg viewBox="0 0 200 200" style="width: 70px; height: 70px; margin: 0 auto 1rem; display: block; filter: drop-shadow(0 0 15px rgba(168,85,247,0.35));">
-            <defs>
-                <!-- Perfect Glowing Filters with feMerge (keeps paths razor-sharp!) -->
-                <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="6" result="blur"/>
-                    <feMerge>
-                        <feMergeNode in="blur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                </filter>
-                <filter id="glow-magenta" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="6" result="blur"/>
-                    <feMerge>
-                        <feMergeNode in="blur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                </filter>
-                <filter id="glow-accent" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="6" result="blur"/>
-                    <feMerge>
-                        <feMergeNode in="blur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                </filter>
-
-                <!-- Color Gradients -->
-                <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#a855f7"/>
-                    <stop offset="100%" stop-color="#ec4899"/>
-                </linearGradient>
-                <linearGradient id="gradient-secondary" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#06b6d4"/>
-                    <stop offset="100%" stop-color="#3b82f6"/>
-                </linearGradient>
-            </defs>
-            
-            <style>
-                @keyframes flow { to { stroke-dashoffset: 0; } }
-                @keyframes gear-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                @keyframes gear-spin-back { 0% { transform: rotate(360deg); } 100% { transform: rotate(0deg); } }
-                @keyframes pulse-dot { 0% { transform: scale(0.85); opacity: 0.6; } 100% { transform: scale(1.15); opacity: 1; } }
-
-                .circuit-flow { stroke-dasharray: 200 400; stroke-dashoffset: 600; animation: flow 4s linear infinite; }
-                .gear-rotation { transform-origin: 100px 100px; animation: gear-spin 12s linear infinite; }
-                .gear-rotation-reverse { transform-origin: 100px 100px; animation: gear-spin-back 8s linear infinite; }
-                .pulse-line { stroke-dasharray: 180 300; stroke-dashoffset: 480; animation: flow 4s linear infinite; }
-                .orbit-rot { transform-origin: 100px 100px; animation: gear-spin 12s linear infinite; }
-                .orbit-rot-rev { transform-origin: 100px 100px; animation: gear-spin-back 8s linear infinite; }
-            </style>
-
-            <path d="M100,35 L106,94 H165 L106,106 V165 L94,106 H35 L94,94 Z" fill="none" stroke="url(#gradient-primary)" stroke-width="3" filter="url(#glow-magenta)"/>
-            <g class="gear-rotation" style="animation-duration:15s;">
-                <circle cx="100" cy="100" r="45" fill="none" stroke="url(#gradient-secondary)" stroke-width="2" stroke-dasharray="5 15" filter="url(#glow-cyan)"/>
-            </g>
-            <circle cx="100" cy="100" r="6" fill="var(--accent)" filter="url(#glow-accent)"/>
+        <!-- Premium Animated servworx SVG (Rotating Double-Star) -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width: 70px; height: 70px; margin: 0 auto 1rem; display: block;">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#00F2FF;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#FF00E5;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <!-- Main Star -->
+          <path d="M50 5 L58 42 L95 50 L58 58 L50 95 L42 58 L5 50 L42 42 Z" fill="url(#starGradient)" filter="url(#glow)">
+            <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="20s" repeatCount="indefinite" />
+          </path>
+          <!-- Secondary Points -->
+          <path d="M50 25 L54 46 L75 50 L54 54 L50 75 L46 54 L25 50 L46 46 Z" fill="#FFFFFF" opacity="0.6" filter="url(#glow)">
+            <animateTransform attributeName="transform" type="rotate" from="360 50 50" to="0 50 50" dur="15s" repeatCount="indefinite" />
+          </path>
         </svg>
         <h1>Servworx Dashboard</h1>
 
