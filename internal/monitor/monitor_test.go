@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -78,5 +80,50 @@ func TestGetHistoryCopy(t *testing.T) {
 	newHistory := GetHistory(serviceName)
 	if newHistory[0] != "Up" {
 		t.Errorf("expected history to remain 'Up', but got '%s'", newHistory[0])
+	}
+}
+
+func TestCheckWebsite(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}))
+	defer ts.Close()
+
+	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success, got failure: %s", msg)
+	}
+
+	success, msg = checkWebsite(ts.URL, []int{200}, true)
+	if !success {
+		t.Errorf("expected success with insecure skip, got failure: %s", msg)
+	}
+}
+
+func TestCheckWebsiteFallback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer ts.Close()
+
+	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	if !success {
+		t.Errorf("expected success on fallback to GET, got failure: %s", msg)
 	}
 }
