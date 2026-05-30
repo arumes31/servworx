@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -440,6 +439,16 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		containerNames := r.FormValue("container_names")
+		for _, c := range strings.Split(containerNames, ",") {
+			c = strings.TrimSpace(c)
+			if c != "" && !config.IsValidContainerName(c) {
+				monitor.LogAction(username, fmt.Sprintf("Invalid container name provided: %s", c), "error")
+				renderConfigWithError(w, fmt.Sprintf("Invalid container name: %s", c))
+				return
+			}
+		}
+
 		oldName := cfg.Services[idx].Name
 		newName := r.FormValue("name")
 		insecureSkip := r.FormValue("insecure_skip_verify") == "on"
@@ -447,7 +456,7 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 		_ = config.UpdateConfig(func(c *config.Config) {
 			c.Services[idx].Name = newName
 			c.Services[idx].WebsiteURL = r.FormValue("website_url")
-			c.Services[idx].ContainerNames = r.FormValue("container_names")
+			c.Services[idx].ContainerNames = containerNames
 			c.Services[idx].Retries = retries
 			c.Services[idx].Interval = interval
 			c.Services[idx].GracePeriod = gracePeriod
@@ -492,7 +501,6 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc := cfg.Services[idx]
-	var validContainerName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 	// run in background to not block HTTP request
 	go func(names, name string, user string) {
@@ -503,7 +511,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 			if c == "" {
 				continue
 			}
-			if !validContainerName.MatchString(c) {
+			if !config.IsValidContainerName(c) {
 				monitor.LogAction(user, fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
 				restartSucceeded = false
 				continue
@@ -585,6 +593,11 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
 		if c != "" {
+			if !config.IsValidContainerName(c) {
+				monitor.LogAction(username, fmt.Sprintf("Invalid container name blocked from logs: %s", c), "error")
+				fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
+				continue
+			}
 			// #nosec G204
 			cmd := exec.Command("docker", "logs", "--tail", "10", c)
 			out, _ := cmd.CombinedOutput()
@@ -759,8 +772,12 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c = strings.TrimSpace(c)
 		if c != "" {
-			targetContainer = c
-			break
+			if config.IsValidContainerName(c) {
+				targetContainer = c
+				break
+			} else {
+				monitor.LogAction("System", fmt.Sprintf("Invalid container name blocked from log stream: %s", c), "error")
+			}
 		}
 	}
 
