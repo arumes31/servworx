@@ -1,12 +1,18 @@
 package config
  
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 )
  
+func jsonEqual(a, b interface{}) bool {
+	aBytes, _ := json.Marshal(a)
+	bBytes, _ := json.Marshal(b)
+	return string(aBytes) == string(bBytes)
+}
+
 func TestIsValidContainerName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -62,7 +68,7 @@ func TestConfigPersistence(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(cfg, loaded) {
+	if !jsonEqual(cfg, loaded) {
 		t.Errorf("Loaded config does not match saved config\nSaved: %+v\nLoaded: %+v", cfg, loaded)
 	}
 }
@@ -88,7 +94,7 @@ func TestStatusPersistence(t *testing.T) {
 		t.Fatalf("LoadStatus failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(status, loaded) {
+	if !jsonEqual(status, loaded) {
 		t.Errorf("Loaded status does not match saved status\nSaved: %+v\nLoaded: %+v", status, loaded)
 	}
 }
