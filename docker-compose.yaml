@@ -4,8 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    environment:
-      - FLASK_ENV=production
     ports:
       - "7676:5000"
     volumes:
