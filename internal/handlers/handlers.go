@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -327,11 +328,21 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 type ConfigViewData struct {
-	Services []config.ServiceConfig `json:"services"`
-	Status   config.Status          `json:"status"`
-	Error    string                 `json:"error,omitempty"`
-	Logs     string                 `json:"logs,omitempty"`
-	LogsSvc  string                 `json:"logs_svc,omitempty"`
+	Services              []config.ServiceConfig `json:"services"`
+	Status                config.Status          `json:"status"`
+	Error                 string                 `json:"error,omitempty"`
+	Logs                  string                 `json:"logs,omitempty"`
+	LogsSvc               string                 `json:"logs_svc,omitempty"`
+	NotificationProviders map[string]bool        `json:"notification_providers"`
+}
+
+func getNotificationProviders() map[string]bool {
+	return map[string]bool{
+		"webhook":  os.Getenv("NOTIFICATION_WEBHOOK_URL") != "",
+		"teams":    os.Getenv("NOTIFICATION_MSTEAMS_URL") != "",
+		"telegram": os.Getenv("NOTIFICATION_TELEGRAM_TOKEN") != "" && os.Getenv("NOTIFICATION_TELEGRAM_CHAT_ID") != "",
+		"email":    os.Getenv("NOTIFICATION_SMTP_HOST") != "" && os.Getenv("NOTIFICATION_SMTP_PORT") != "" && os.Getenv("NOTIFICATION_SMTP_FROM") != "" && os.Getenv("NOTIFICATION_SMTP_TO") != "",
+	}
 }
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
@@ -373,8 +384,9 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	// Just display
 	data := ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
+		Services:              cfg.Services,
+		Status:                *status,
+		NotificationProviders: getNotificationProviders(),
 	}
 
 	// Extract potential error/logs parameters passed explicitly by other methods to this view.
@@ -389,9 +401,10 @@ func renderConfigWithError(w http.ResponseWriter, errMsg string) {
 	cfg, _ := config.LoadConfig()
 	status, _ := config.LoadStatus()
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
-		Error:    errMsg,
+		Services:              cfg.Services,
+		Status:                *status,
+		Error:                 errMsg,
+		NotificationProviders: getNotificationProviders(),
 	})
 }
 
@@ -477,10 +490,14 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-	enableWebhook := r.FormValue("enable_webhook") == "on"
-	enableTeams := r.FormValue("enable_teams") == "on"
-	enableTelegram := r.FormValue("enable_telegram") == "on"
-	enableEmail := r.FormValue("enable_email") == "on"
+	
+	// Enforce that notifications are only enabled if the environment config is valid/present
+	providers := getNotificationProviders()
+	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
+	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
+	enableTelegram := r.FormValue("enable_telegram") == "on" && providers["telegram"]
+	enableEmail := r.FormValue("enable_email") == "on" && providers["email"]
+
 	alertOnFailure := r.FormValue("alert_on_failure") == "on"
 	alertOnRecovery := r.FormValue("alert_on_recovery") == "on"
 	alertOnRestart := r.FormValue("alert_on_restart") == "on"
@@ -695,10 +712,11 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 
 	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
-		Logs:     logsBuilder.String(),
-		LogsSvc:  svc.Name,
+		Services:              cfg.Services,
+		Status:                *status,
+		Logs:                  logsBuilder.String(),
+		LogsSvc:               svc.Name,
+		NotificationProviders: getNotificationProviders(),
 	})
 }
 

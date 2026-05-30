@@ -531,20 +531,20 @@
                             <label style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--primary);">🔔 Enable Notifications</label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.25rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="webhook_{{ $i }}" name="enable_webhook" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableWebhook }}checked{{ end }}>
-                                    <label for="webhook_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">Generic Webhook</label>
+                                    <input type="checkbox" id="webhook_{{ $i }}" name="enable_webhook" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableWebhook }}checked{{ end }} {{ if not $.NotificationProviders.webhook }}disabled{{ end }}>
+                                    <label for="webhook_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.webhook }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Generic Webhook {{ if not $.NotificationProviders.webhook }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="teams_{{ $i }}" name="enable_teams" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTeams }}checked{{ end }}>
-                                    <label for="teams_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">MS Teams</label>
+                                    <input type="checkbox" id="teams_{{ $i }}" name="enable_teams" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTeams }}checked{{ end }} {{ if not $.NotificationProviders.teams }}disabled{{ end }}>
+                                    <label for="teams_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.teams }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">MS Teams {{ if not $.NotificationProviders.teams }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="telegram_{{ $i }}" name="enable_telegram" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTelegram }}checked{{ end }}>
-                                    <label for="telegram_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">Telegram Bot</label>
+                                    <input type="checkbox" id="telegram_{{ $i }}" name="enable_telegram" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableTelegram }}checked{{ end }} {{ if not $.NotificationProviders.telegram }}disabled{{ end }}>
+                                    <label for="telegram_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.telegram }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">Telegram Bot {{ if not $.NotificationProviders.telegram }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="email_{{ $i }}" name="enable_email" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableEmail }}checked{{ end }}>
-                                    <label for="email_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer;">SMTP Email</label>
+                                    <input type="checkbox" id="email_{{ $i }}" name="enable_email" style="width: auto; margin: 0; cursor: pointer;" {{ if $service.EnableEmail }}checked{{ end }} {{ if not $.NotificationProviders.email }}disabled{{ end }}>
+                                    <label for="email_{{ $i }}" style="margin: 0; font-weight: normal; cursor: pointer; {{ if not $.NotificationProviders.email }}color: var(--neutral); opacity: 0.6; cursor: not-allowed;{{ end }}">SMTP Email {{ if not $.NotificationProviders.email }}<span style="font-size: 0.75rem; color: var(--danger); font-weight: bold;">(Env missing)</span>{{ end }}</label>
                                 </div>
                             </div>
                         </div>
