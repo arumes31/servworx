@@ -1,4 +1,4 @@
-# 🛠️ servworx
+# servworx
 
 <div align="center">
   <img src="logo.svg" width="120" height="120" alt="servworx logo">
