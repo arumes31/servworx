@@ -364,6 +364,109 @@ func parseIndex(w http.ResponseWriter, r *http.Request) (int, bool) {
 	return idx, true
 }
 
+func parseStatusCodes(codesStr string) ([]int, error) {
+	var codes []int
+	if strings.TrimSpace(codesStr) == "" {
+		return []int{200}, nil
+	}
+	parts := strings.Split(codesStr, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			c, err := strconv.Atoi(p)
+			if err != nil {
+				return nil, err
+			}
+			codes = append(codes, c)
+		}
+	}
+	if len(codes) == 0 {
+		return []int{200}, nil
+	}
+	return codes, nil
+}
+
+func handleDeleteService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+	deletedName := cfg.Services[idx].Name
+	_ = config.UpdateConfig(func(c *config.Config) {
+		c.Services = append(c.Services[:idx], c.Services[idx+1:]...)
+	})
+	_ = config.UpdateStatus(func(s *config.Status) {
+		for i, sts := range s.Services {
+			if sts.Name == deletedName {
+				s.Services = append(s.Services[:i], s.Services[i+1:]...)
+				break
+			}
+		}
+	})
+	monitor.LogAction(username, fmt.Sprintf("Deleted service: %s", deletedName), "user")
+	monitor.LogAction("System", fmt.Sprintf("Removed status for service: %s", deletedName), "system")
+
+	monitor.RestartMonitoring()
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
+func handleUpdateService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	_ = r.ParseForm()
+	retries, err1 := strconv.Atoi(r.FormValue("retries"))
+	interval, err2 := strconv.Atoi(r.FormValue("interval"))
+	gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
+
+	if err1 != nil || err2 != nil || err3 != nil || retries < 1 || interval < 1 || gracePeriod < 1 {
+		monitor.LogAction(username, "Invalid numeric inputs for service", "error")
+		renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
+		return
+	}
+
+	codes, err := parseStatusCodes(r.FormValue("accepted_status_codes"))
+	if err != nil {
+		renderConfigWithError(w, "Invalid status codes")
+		return
+	}
+
+	containerNames := r.FormValue("container_names")
+	for _, c := range strings.Split(containerNames, ",") {
+		c = strings.TrimSpace(c)
+		if c != "" && !config.IsValidContainerName(c) {
+			monitor.LogAction(username, fmt.Sprintf("Invalid container name provided: %s", c), "error")
+			renderConfigWithError(w, fmt.Sprintf("Invalid container name: %s", c))
+			return
+		}
+	}
+
+	oldName := cfg.Services[idx].Name
+	newName := r.FormValue("name")
+	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
+
+	_ = config.UpdateConfig(func(c *config.Config) {
+		c.Services[idx].Name = newName
+		c.Services[idx].WebsiteURL = r.FormValue("website_url")
+		c.Services[idx].ContainerNames = containerNames
+		c.Services[idx].Retries = retries
+		c.Services[idx].Interval = interval
+		c.Services[idx].GracePeriod = gracePeriod
+		c.Services[idx].AcceptedStatusCodes = codes
+		c.Services[idx].InsecureSkipVerify = insecureSkip
+	})
+
+	if oldName != newName {
+		_ = config.UpdateStatus(func(s *config.Status) {
+			for i := range s.Services {
+				if s.Services[i].Name == oldName {
+					s.Services[i].Name = newName
+					monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
+					break
+				}
+			}
+		})
+	}
+
+	monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
+	monitor.RestartMonitoring()
+	http.Redirect(w, r, "/config", http.StatusSeeOther)
+}
+
 func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
@@ -382,108 +485,15 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if action == "delete" {
-		deletedName := cfg.Services[idx].Name
-		_ = config.UpdateConfig(func(c *config.Config) {
-			c.Services = append(c.Services[:idx], c.Services[idx+1:]...)
-		})
-		_ = config.UpdateStatus(func(s *config.Status) {
-			for i, sts := range s.Services {
-				if sts.Name == deletedName {
-					s.Services = append(s.Services[:i], s.Services[i+1:]...)
-					break
-				}
-			}
-		})
-		monitor.LogAction(username, fmt.Sprintf("Deleted service: %s", deletedName), "user")
-		monitor.LogAction("System", fmt.Sprintf("Removed status for service: %s", deletedName), "system")
-
-		monitor.RestartMonitoring()
-		http.Redirect(w, r, "/config", http.StatusSeeOther)
+		handleDeleteService(w, r, username, idx, cfg)
 		return
 	}
 
 	if action == "update" {
-		r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-		_ = r.ParseForm()
-		retries, err1 := strconv.Atoi(r.FormValue("retries"))
-		interval, err2 := strconv.Atoi(r.FormValue("interval"))
-		gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
-
-		if err1 != nil || err2 != nil || err3 != nil || retries < 1 || interval < 1 || gracePeriod < 1 {
-			monitor.LogAction(username, "Invalid numeric inputs for service", "error")
-			renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
-			return
-		}
-
-		codesStr := r.FormValue("accepted_status_codes")
-		var codes []int
-		if strings.TrimSpace(codesStr) == "" {
-			codes = []int{200}
-			monitor.LogAction(username, fmt.Sprintf("Service %d: Empty accepted_status_codes, defaulting to [200]", idx), "user")
-		} else {
-			parts := strings.Split(codesStr, ",")
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					c, err := strconv.Atoi(p)
-					if err != nil {
-						renderConfigWithError(w, "Invalid status codes")
-						return
-					}
-					codes = append(codes, c)
-				}
-			}
-			if len(codes) == 0 {
-				codes = []int{200}
-				monitor.LogAction(username, fmt.Sprintf("Service %d: No valid accepted_status_codes, defaulting to [200]", idx), "user")
-			}
-		}
-
-		containerNames := r.FormValue("container_names")
-		for _, c := range strings.Split(containerNames, ",") {
-			c = strings.TrimSpace(c)
-			if c != "" && !config.IsValidContainerName(c) {
-				monitor.LogAction(username, fmt.Sprintf("Invalid container name provided: %s", c), "error")
-				renderConfigWithError(w, fmt.Sprintf("Invalid container name: %s", c))
-				return
-			}
-		}
-
-		oldName := cfg.Services[idx].Name
-		newName := r.FormValue("name")
-		insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-
-		_ = config.UpdateConfig(func(c *config.Config) {
-			c.Services[idx].Name = newName
-			c.Services[idx].WebsiteURL = r.FormValue("website_url")
-			c.Services[idx].ContainerNames = containerNames
-			c.Services[idx].Retries = retries
-			c.Services[idx].Interval = interval
-			c.Services[idx].GracePeriod = gracePeriod
-			c.Services[idx].AcceptedStatusCodes = codes
-			c.Services[idx].InsecureSkipVerify = insecureSkip
-			// paused remains the same
-		})
-
-		if oldName != newName {
-			_ = config.UpdateStatus(func(s *config.Status) {
-				for i := range s.Services {
-					if s.Services[i].Name == oldName {
-						s.Services[i].Name = newName
-						monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
-						break
-					}
-				}
-			})
-		}
-
-		monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
-		monitor.RestartMonitoring()
-		http.Redirect(w, r, "/config", http.StatusSeeOther)
+		handleUpdateService(w, r, username, idx, cfg)
 		return
 	}
 
-	renderConfigWithError(w, "Invalid action specified")
 }
 
 func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
