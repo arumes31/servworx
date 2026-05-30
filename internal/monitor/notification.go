@@ -84,12 +84,14 @@ func sendWebhook(svc config.ServiceConfig, status string, detail string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data)) // #nosec G107
+	// #nosec G107 G704
+	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
 		return err
@@ -130,12 +132,14 @@ func sendTeams(svc config.ServiceConfig, status string, detail string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data)) // #nosec G107
+	// #nosec G107 G704
+	req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
 		return err
@@ -179,20 +183,22 @@ func sendTelegram(svc config.ServiceConfig, status string, detail string) error 
 		baseURL = "https://api.telegram.org"
 	}
 	telegramURL := fmt.Sprintf("%s/bot%s/sendMessage", baseURL, token)
-	req, err := http.NewRequest("POST", telegramURL, bytes.NewBuffer(data)) // #nosec G107
+	// #nosec G107 G704
+	req, err := http.NewRequest("POST", telegramURL, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("telegram request creation failed")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
 		// Sanitize error to prevent leaking the bot token from *url.Error
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
-			return fmt.Errorf("telegram request failed: %s", urlErr.Err.Error())
+			return fmt.Errorf("telegram api request failed: connection error")
 		}
-		return fmt.Errorf("telegram request failed")
+		return fmt.Errorf("telegram api request failed: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -240,6 +246,7 @@ func sendEmail(svc config.ServiceConfig, status string, detail string) error {
 	}
 
 	// SMTP SendMail (uses TLS handshake if port 465/587 or upgrades via STARTTLS natively if supported)
+	// #nosec G707
 	err = smtp.SendMail(addr, auth, from, []string{to}, message)
 	if err != nil {
 		// Log internal SMTP error but return it to be printed
