@@ -44,7 +44,7 @@ docker compose up -d --force-recreate
 
 *For local builds, pull the latest source code and rebuild:*
 ```bash
-git pull origin v2_test
+git pull origin main
 docker compose up --build -d
 ```
 ```

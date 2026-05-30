@@ -3,10 +3,12 @@ package monitor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -82,7 +84,7 @@ func sendWebhook(svc config.ServiceConfig, status string, detail string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data)) // #nosec G107
 	if err != nil {
 		return err
 	}
@@ -128,7 +130,7 @@ func sendTeams(svc config.ServiceConfig, status string, detail string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data)) // #nosec G107
 	if err != nil {
 		return err
 	}
@@ -172,16 +174,25 @@ func sendTelegram(svc config.ServiceConfig, status string, detail string) error 
 		return err
 	}
 
-	telegramURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
-	req, err := http.NewRequest("POST", telegramURL, bytes.NewBuffer(data))
+	baseURL := os.Getenv("NOTIFICATION_TELEGRAM_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.telegram.org"
+	}
+	telegramURL := fmt.Sprintf("%s/bot%s/sendMessage", baseURL, token)
+	req, err := http.NewRequest("POST", telegramURL, bytes.NewBuffer(data)) // #nosec G107
 	if err != nil {
-		return err
+		return fmt.Errorf("telegram request creation failed")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		return err
+		// Sanitize error to prevent leaking the bot token from *url.Error
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			return fmt.Errorf("telegram request failed: %s", urlErr.Err.Error())
+		}
+		return fmt.Errorf("telegram request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
 

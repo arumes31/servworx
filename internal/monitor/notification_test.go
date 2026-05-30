@@ -89,10 +89,20 @@ func TestSendTeams(t *testing.T) {
 }
 
 func TestSendTelegram(t *testing.T) {
+	var receivedPayload map[string]interface{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
 	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "mock-token-12345")
 	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "mock-chat-12345")
+	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
 	defer os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
 	defer os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+	defer os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
 
 	svc := config.ServiceConfig{
 		Name:           "TelegramService",
@@ -101,8 +111,15 @@ func TestSendTelegram(t *testing.T) {
 	}
 
 	err := sendTelegram(svc, "Down", "Health check failed.")
-	if err == nil {
-		t.Error("expected error from telegram api with invalid token, got nil")
+	if err != nil {
+		t.Fatalf("sendTelegram failed: %v", err)
+	}
+
+	if receivedPayload["chat_id"] != "mock-chat-12345" {
+		t.Errorf("expected chat_id mock-chat-12345, got %v", receivedPayload["chat_id"])
+	}
+	if !strings.Contains(receivedPayload["text"].(string), "TelegramService") {
+		t.Errorf("expected payload text to contain TelegramService, got %v", receivedPayload["text"])
 	}
 }
 
@@ -145,7 +162,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 		writer := bufio.NewWriter(conn)
 
 		// 1. Greet Client
-		writer.WriteString("220 mock.smtp.com\r\n")
+		_, _ = writer.WriteString("220 mock.smtp.com\r\n")
 		writer.Flush()
 
 		// 2. Read EHLO
@@ -154,7 +171,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			serverErrChan <- fmt.Errorf("expected EHLO/HELO, got: %s", line)
 			return
 		}
-		writer.WriteString("250-mock.smtp.com\r\n250 8BITMIME\r\n")
+		_, _ = writer.WriteString("250-mock.smtp.com\r\n250 8BITMIME\r\n")
 		writer.Flush()
 
 		// 3. Read MAIL FROM
@@ -163,7 +180,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			serverErrChan <- fmt.Errorf("expected MAIL FROM, got: %s", line)
 			return
 		}
-		writer.WriteString("250 2.1.0 Ok\r\n")
+		_, _ = writer.WriteString("250 2.1.0 Ok\r\n")
 		writer.Flush()
 
 		// 4. Read RCPT TO
@@ -172,7 +189,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			serverErrChan <- fmt.Errorf("expected RCPT TO, got: %s", line)
 			return
 		}
-		writer.WriteString("250 2.1.5 Ok\r\n")
+		_, _ = writer.WriteString("250 2.1.5 Ok\r\n")
 		writer.Flush()
 
 		// 5. Read DATA
@@ -181,7 +198,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			serverErrChan <- fmt.Errorf("expected DATA, got: %s", line)
 			return
 		}
-		writer.WriteString("354 Start mail input; end with <CRLF>.<CRLF>\r\n")
+		_, _ = writer.WriteString("354 Start mail input; end with <CRLF>.<CRLF>\r\n")
 		writer.Flush()
 
 		// 6. Read Message content until .\r\n
@@ -195,12 +212,12 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			}
 			receivedEmail.WriteString(line)
 		}
-		writer.WriteString("250 2.0.0 Ok: queued as 12345\r\n")
+		_, _ = writer.WriteString("250 2.0.0 Ok: queued as 12345\r\n")
 		writer.Flush()
 
 		// 7. Read QUIT
-		line, _ = reader.ReadString('\n')
-		writer.WriteString("221 2.0.0 Bye\r\n")
+		_, _ = reader.ReadString('\n')
+		_, _ = writer.WriteString("221 2.0.0 Bye\r\n")
 		writer.Flush()
 
 		serverErrChan <- nil
@@ -217,6 +234,8 @@ func TestSendEmailMockSMTP(t *testing.T) {
 	defer func() {
 		os.Unsetenv("NOTIFICATION_SMTP_HOST")
 		os.Unsetenv("NOTIFICATION_SMTP_PORT")
+		os.Unsetenv("NOTIFICATION_SMTP_USER")
+		os.Unsetenv("NOTIFICATION_SMTP_PASS")
 		os.Unsetenv("NOTIFICATION_SMTP_FROM")
 		os.Unsetenv("NOTIFICATION_SMTP_TO")
 	}()

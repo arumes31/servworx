@@ -35,19 +35,19 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		index          string
-		mustNotContain string
+		name            string
+		index           string
+		expectAllBlocked bool
 	}{
 		{
-			name:           "Filtered malicious container, fallback to valid",
-			index:          "0",
-			mustNotContain: "data: No valid containers found",
+			name:            "Filtered malicious container, fallback to valid",
+			index:           "0",
+			expectAllBlocked: false,
 		},
 		{
-			name:           "All containers malicious",
-			index:          "1",
-			mustNotContain: "NONE", // We expect "data: No valid containers found"
+			name:            "All containers malicious",
+			index:           "1",
+			expectAllBlocked: true,
 		},
 	}
 
@@ -62,13 +62,13 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			HandleAPILogsStreamGET(rr, req)
 
 			body := rr.Body.String()
-			if tt.index == "0" {
-				if strings.Contains(body, "data: No valid containers found") {
-					t.Errorf("Service 0 has valid 'valid-name', but got: %q", body)
+			if tt.expectAllBlocked {
+				if !strings.Contains(body, "data: No valid containers found") {
+					t.Errorf("expected all containers blocked, but got: %q", body)
 				}
 			} else {
-				if !strings.Contains(body, "data: No valid containers found") {
-					t.Errorf("Service 1 should have blocked all names, but got: %q", body)
+				if strings.Contains(body, "data: No valid containers found") {
+					t.Errorf("expected valid containers to remain, but got: %q", body)
 				}
 			}
 		})

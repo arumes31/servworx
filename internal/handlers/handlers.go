@@ -407,8 +407,6 @@ func handleDeleteService(w http.ResponseWriter, r *http.Request, username string
 }
 
 func handleUpdateService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-	_ = r.ParseForm()
 	retries, err1 := strconv.Atoi(r.FormValue("retries"))
 	interval, err2 := strconv.Atoi(r.FormValue("interval"))
 	gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
@@ -476,6 +474,8 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 }
 
 func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	_ = r.ParseForm()
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {
