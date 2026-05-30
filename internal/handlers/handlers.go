@@ -108,7 +108,6 @@ func formatDuration(seconds int64) string {
 	return strings.Join(parts, ", ")
 }
 
-
 // requireAuth is a middleware to enforce authentication
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +293,6 @@ type ConfigViewData struct {
 	Logs     string                 `json:"logs,omitempty"`
 	LogsSvc  string                 `json:"logs_svc,omitempty"`
 }
-
 
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
@@ -705,7 +703,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-
 	apiStatus := APIStatusResponse{}
 	for i, s := range status.Services {
 		history := []string{}
@@ -717,7 +714,6 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 			History:       history,
 		})
 	}
-
 
 	w.Header().Set("Content-Type", "application/json")
 	data := APIViewData{
@@ -773,7 +769,6 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return
 	}
-
 
 	// #nosec G204 G702
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
