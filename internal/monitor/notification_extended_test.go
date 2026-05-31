@@ -298,10 +298,16 @@ func TestSendNotificationDispatches(t *testing.T) {
 
 // TestIsQuietHoursOvernight covers wrap-around ranges
 func TestIsQuietHoursOvernight(t *testing.T) {
-	result1 := isQuietHours("23:00", "01:00")
-	result2 := isQuietHours("01:00", "23:00")
-	_ = result1
-	_ = result2
+	now, _ := time.Parse("15:04", "23:30")
+	result1 := isQuietHours(now, "23:00", "01:00")
+	now2, _ := time.Parse("15:04", "12:00")
+	result2 := isQuietHours(now2, "01:00", "23:00")
+	if !result1 {
+		t.Error("expected true for 23:30 in 23:00-01:00")
+	}
+	if !result2 {
+		t.Error("expected true for 12:00 in 01:00-23:00")
+	}
 }
 
 // TestSendWebhookMissingConfig verifies error when env var is missing

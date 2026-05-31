@@ -29,8 +29,15 @@ type APIViewData struct {
 }
 
 func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
-	cfg, _ := config.LoadConfig()
-	status, _ := config.LoadStatus()
+	cfg, errCfg := config.LoadConfig()
+	status, errStatus := config.LoadStatus()
+
+	if errCfg != nil || errStatus != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "Failed to load configuration"}`)
+		return
+	}
 
 	currentTime := time.Now().Unix()
 
@@ -216,9 +223,6 @@ func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"success": false, "error": "Invalid index"}`)
 		return
 	}
 

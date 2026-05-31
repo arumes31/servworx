@@ -18,11 +18,11 @@ import (
 )
 
 // isQuietHours checks if the current time falls inside the configured start and end hour range.
-func isQuietHours(start, end string) bool {
+func isQuietHours(now time.Time, start, end string) bool {
 	if start == "" || end == "" {
 		return false
 	}
-	nowHM := time.Now().Format("15:04")
+	nowHM := now.Format("15:04")
 	if start < end {
 		return nowHM >= start && nowHM <= end
 	}
@@ -32,13 +32,15 @@ func isQuietHours(start, end string) bool {
 // SendNotification dispatches asynchronous alerts over enabled channels on status transitions
 func SendNotification(svc config.ServiceConfig, status string, detailMessage string) {
 	// Execute Quiet Hours and Snooze checks
-	if svc.AlertSnoozeUntil > time.Now().Unix() {
-		LogAction("System", fmt.Sprintf("Alerts for service %s are currently snoozed. Skipping notification.", svc.Name), "system")
-		return
-	}
-	if isQuietHours(svc.QuietHoursStart, svc.QuietHoursEnd) {
-		LogAction("System", fmt.Sprintf("Alerts for service %s are in Quiet Hours (%s to %s). Skipping notification.", svc.Name, svc.QuietHoursStart, svc.QuietHoursEnd), "system")
-		return
+	if status != "Up" || (status == "Up" && !svc.AlertOnRecovery) {
+		if svc.AlertSnoozeUntil > time.Now().Unix() {
+			LogAction("System", fmt.Sprintf("Alerts for service %s are currently snoozed. Skipping notification.", svc.Name), "system")
+			return
+		}
+		if isQuietHours(time.Now(), svc.QuietHoursStart, svc.QuietHoursEnd) {
+			LogAction("System", fmt.Sprintf("Alerts for service %s are in Quiet Hours (%s to %s). Skipping notification.", svc.Name, svc.QuietHoursStart, svc.QuietHoursEnd), "system")
+			return
+		}
 	}
 
 	// Execute asynchronously in a goroutine so it never blocks the health check loop

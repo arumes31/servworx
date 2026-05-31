@@ -149,8 +149,13 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	monitor.LogAction(username, "Accessed configuration page", "user")
 
-	cfg, _ := config.LoadConfig()
-	status, _ := config.LoadStatus()
+	cfg, errCfg := config.LoadConfig()
+	status, errStatus := config.LoadStatus()
+
+	if errCfg != nil || errStatus != nil || cfg == nil || status == nil {
+		http.Error(w, "System error loading config", http.StatusInternalServerError)
+		return
+	}
 
 	currentTime := time.Now().Unix()
 
@@ -322,7 +327,12 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	action := r.FormValue("form_action")
 	monitor.LogAction(username, fmt.Sprintf("Reached update_service endpoint for index %d with action %s", idx, action), "user")
 
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		monitor.LogAction(username, fmt.Sprintf("System error loading config: %v", err), "error")
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		monitor.LogAction(username, fmt.Sprintf("Invalid service index %d", idx), "error")
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
@@ -348,7 +358,11 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested force restart for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -401,7 +415,11 @@ func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested pause/resume monitoring for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -433,7 +451,11 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested logs for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -466,6 +488,10 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
+	if cfg == nil || status == nil {
+		http.Error(w, "System error loading config", http.StatusInternalServerError)
+		return
+	}
 
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
 		Services:              cfg.Services,

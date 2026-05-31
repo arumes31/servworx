@@ -346,10 +346,10 @@ func TestSendPushoverMissing(t *testing.T) {
 }
 
 func TestIsQuietHours(t *testing.T) {
-	if !isQuietHours("00:00", "23:59") {
+	if !isQuietHours(time.Now(), "00:00", "23:59") {
 		t.Error("expected 00:00 to 23:59 to be quiet hours")
 	}
-	if isQuietHours("", "") {
+	if isQuietHours(time.Now(), "", "") {
 		t.Error("expected empty quiet hours start/end to be inactive")
 	}
 }

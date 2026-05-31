@@ -26,7 +26,10 @@ func initConfig() error {
 	_, err := LoadConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
-			adminHash, _ := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
+			adminHash, err := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
+			if err != nil {
+				return fmt.Errorf("failed to hash default password: %w", err)
+			}
 			// Save default
 			defaultCfg := &Config{
 				Users: map[string]string{"admin": string(adminHash)},

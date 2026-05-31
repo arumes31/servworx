@@ -289,19 +289,25 @@ func updateServiceStatus(serviceName, status string) {
 									if lastAlert == 0 || (nowUnix-lastAlert) >= int64(svc.AlertRepeatInterval) {
 										// Check max alerts cap
 										if svc.AlertMaxRepeats == 0 || s.Services[i].AlertCount < svc.AlertMaxRepeats+1 {
-											s.Services[i].LastAlertTime = &nowUnix
-											s.Services[i].AlertCount++
-
-											downStr := "unknown time"
-											if s.Services[i].DownSince != nil {
-												downStr = *s.Services[i].DownSince
-											}
-
-											repeatMsg := fmt.Sprintf("[Repeat Alert #%d] Service %s has been Down since %s.",
-												s.Services[i].AlertCount-1, serviceName, downStr)
-
 											if svc.AlertOnFailure {
-												SendNotification(svc, "Down", repeatMsg)
+												canDispatch := true
+												if svc.AlertSnoozeUntil > time.Now().Unix() || isQuietHours(time.Now(), svc.QuietHoursStart, svc.QuietHoursEnd) {
+													canDispatch = false
+												}
+												if canDispatch {
+													s.Services[i].LastAlertTime = &nowUnix
+													s.Services[i].AlertCount++
+
+													downStr := "unknown time"
+													if s.Services[i].DownSince != nil {
+														downStr = *s.Services[i].DownSince
+													}
+
+													repeatMsg := fmt.Sprintf("[Repeat Alert #%d] Service %s has been Down since %s.",
+														s.Services[i].AlertCount-1, serviceName, downStr)
+
+													SendNotification(svc, "Down", repeatMsg)
+												}
 											}
 										}
 									}
