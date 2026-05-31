@@ -1,7 +1,7 @@
 # 🛠️ servworx
 
 <div align="center">
-  <img src="logo.svg" width="120" height="120" alt="servworx logo">
+  <img src="static/logo.svg" width="120" height="120" alt="servworx logo">
 </div>
 
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
@@ -276,6 +276,8 @@ Since `servworx` communicates directly with the Docker Engine to perform self-he
 │   ├── change_password.html      # Authentication profile page
 │   ├── config.html               # Main live monitoring dashboard
 │   └── login.html                # Web portal login screen
+├── static/                       # Static assets (logo, icons, etc.)
+│   └── logo.svg
 ├── Dockerfile                    # Multi-stage optimized Docker build instructions
 ├── docker-compose.yaml           # Local container orchestration file
 ├── LICENSE                       # MIT License file

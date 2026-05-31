@@ -12,7 +12,7 @@ RUN apk add --no-cache docker-cli
 WORKDIR /app
 COPY --from=builder /app/servworx .
 COPY --from=builder /app/templates ./templates
-COPY --from=builder /app/logo.svg .
+COPY --from=builder /app/static ./static
 RUN mkdir -p /app/config
 
 EXPOSE 5000
