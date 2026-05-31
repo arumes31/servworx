@@ -1,193 +1,25 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/arumes31/servworx/internal/auth"
 	"github.com/arumes31/servworx/internal/config"
 	"github.com/arumes31/servworx/internal/monitor"
 )
 
-var templates *template.Template
-
-func InitTemplates(templateDir string) {
-	templates = template.Must(template.ParseGlob(filepath.Join(templateDir, "*.html")))
-}
-
-func hashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-// checkPassword verifies a password against a stored hash.
-// It supports both bcrypt (Go) and SHA256 hex (legacy PHP) formats.
-// Returns true if the password matches.
-func checkPassword(password, storedHash string) bool {
-	// Bcrypt hashes always start with "$2a$", "$2b$", or "$2y$"
-	if strings.HasPrefix(storedHash, "$2") {
-		return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)) == nil
-	}
-
-	// Legacy SHA256 hex hash (64 character hex string)
-	if len(storedHash) == 64 {
-		sum := sha256.Sum256([]byte(password))
-		return hex.EncodeToString(sum[:]) == storedHash
-	}
-
-	return false
-}
-
-// migratePasswordToBcrypt re-hashes a legacy password with bcrypt and saves it.
-func migratePasswordToBcrypt(username, password string) {
-	newHash, err := hashPassword(password)
-	if err != nil {
-		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
-		return
-	}
-	_ = config.UpdateConfig(func(cfg *config.Config) {
-		cfg.Users[username] = newHash
-	})
-	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
-}
-
-// formatDuration matches Python's format_duration output closely
-func formatDuration(seconds int64) string {
-	if seconds <= 0 {
-		return "0 seconds"
-	}
-	days := seconds / (24 * 3600)
-	seconds %= (24 * 3600)
-	hours := seconds / 3600
-	seconds %= 3600
-	minutes := seconds / 60
-	seconds %= 60
-
-	var parts []string
-	if days > 0 {
-		s := ""
-		if days != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d day%s", days, s))
-	}
-	if hours > 0 {
-		s := ""
-		if hours != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d hour%s", hours, s))
-	}
-	if minutes > 0 {
-		s := ""
-		if minutes != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d minute%s", minutes, s))
-	}
-
-	if seconds > 0 || len(parts) == 0 {
-		s := ""
-		if seconds != 1 {
-			s = "s"
-		}
-		parts = append(parts, fmt.Sprintf("%d second%s", seconds, s))
-	}
-	return strings.Join(parts, ", ")
-}
-
-// requireAuth is a middleware to enforce authentication
-func requireAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		username, ok := auth.GetSession(r)
-		if !ok {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-
-		// Ensure admin has changed default password
-		if username == "admin" && r.URL.Path != "/change_password" && r.URL.Path != "/logout" {
-			cfg, err := config.LoadConfig()
-			if err == nil {
-				if checkPassword("changeme", cfg.Users["admin"]) {
-					http.Redirect(w, r, "/change_password", http.StatusSeeOther)
-					return
-				}
-			}
-		}
-
-		// Store user in context or just let handlers get it from session wrapper if needed
-		next(w, r)
-	}
-}
-
-func RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		if _, ok := auth.GetSession(r); !ok {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/config", http.StatusSeeOther)
-	})
-
-	mux.HandleFunc("GET /login", HandleLoginGET)
-	mux.HandleFunc("POST /login", HandleLoginPOST)
-	mux.HandleFunc("GET /logout", requireAuth(HandleLogout))
-	mux.HandleFunc("GET /change_password", requireAuth(HandleChangePasswordGET))
-	mux.HandleFunc("POST /change_password", requireAuth(HandleChangePasswordPOST))
-	mux.HandleFunc("GET /config", requireAuth(HandleConfigGET))
-	mux.HandleFunc("POST /update_service/{index}", requireAuth(HandleUpdateServicePOST))
-	mux.HandleFunc("POST /add_service", requireAuth(HandleAddServicePOST))
-	mux.HandleFunc("POST /force_restart/{index}", requireAuth(HandleForceRestartPOST))
-	mux.HandleFunc("POST /pause_monitoring/{index}", requireAuth(HandlePauseMonitoringPOST))
-	mux.HandleFunc("GET /view_logs/{index}", requireAuth(HandleViewLogsGET))
-
-	// JSON / AJAX UX Endpoints
-	mux.HandleFunc("GET /api/status", requireAuth(HandleAPIStatusGET))
-	mux.HandleFunc("GET /api/logs/stream/{index}", requireAuth(HandleAPILogsStreamGET))
-
-	// Favicon Route serving our premium animated SVG
-	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/svg+xml")
-		fmt.Fprint(w, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <defs>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00F2FF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FF00E5;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <!-- Main Star -->
-  <path d="M50 5 L58 42 L95 50 L58 58 L50 95 L42 58 L5 50 L42 42 Z" fill="url(#starGradient)" filter="url(#glow)">
-    <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="20s" repeatCount="indefinite" />
-  </path>
-  <!-- Secondary Points -->
-  <path d="M50 25 L54 46 L75 50 L54 54 L50 75 L46 54 L25 50 L46 46 Z" fill="#FFFFFF" opacity="0.6" filter="url(#glow)">
-    <animateTransform attributeName="transform" type="rotate" from="360 50 50" to="0 50 50" dur="15s" repeatCount="indefinite" />
-  </path>
-</svg>`)
-	})
+type ConfigViewData struct {
+	Services              []config.ServiceConfig `json:"services"`
+	Status                config.Status          `json:"status"`
+	Error                 string                 `json:"error,omitempty"`
+	Logs                  string                 `json:"logs,omitempty"`
+	LogsSvc               string                 `json:"logs_svc,omitempty"`
+	NotificationProviders map[string]bool        `json:"notification_providers"`
 }
 
 func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
@@ -313,22 +145,18 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
-type ConfigViewData struct {
-	Services []config.ServiceConfig `json:"services"`
-	Status   config.Status          `json:"status"`
-	Error    string                 `json:"error,omitempty"`
-	Logs     string                 `json:"logs,omitempty"`
-	LogsSvc  string                 `json:"logs_svc,omitempty"`
-}
-
 func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
 	monitor.LogAction(username, "Accessed configuration page", "user")
 
-	cfg, _ := config.LoadConfig()
-	status, _ := config.LoadStatus()
+	cfg, errCfg := config.LoadConfig()
+	status, errStatus := config.LoadStatus()
 
-	// Recalculate UI fields
+	if errCfg != nil || errStatus != nil || cfg == nil || status == nil {
+		http.Error(w, "System error loading config", http.StatusInternalServerError)
+		return
+	}
+
 	currentTime := time.Now().Unix()
 
 	for i, svc := range cfg.Services {
@@ -358,60 +186,13 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Just display
 	data := ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
+		Services:              cfg.Services,
+		Status:                *status,
+		NotificationProviders: getNotificationProviders(),
 	}
-
-	// Extract potential error/logs parameters passed explicitly by other methods to this view.
-	// Since we are rebuilding, we don't have flash sessions, so we rely on explicit data injection
-	// from methods rendering directly or via query params (we render directly on error).
 
 	_ = templates.ExecuteTemplate(w, "config.html", data)
-}
-
-// renderConfigWithError is a helper for returning the config page with an error immediately
-func renderConfigWithError(w http.ResponseWriter, errMsg string) {
-	cfg, _ := config.LoadConfig()
-	status, _ := config.LoadStatus()
-	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
-		Error:    errMsg,
-	})
-}
-
-func parseIndex(w http.ResponseWriter, r *http.Request) (int, bool) {
-	idxStr := r.PathValue("index")
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		renderConfigWithError(w, "Invalid service index format")
-		return 0, false
-	}
-	return idx, true
-}
-
-func parseStatusCodes(codesStr string) ([]int, error) {
-	var codes []int
-	if strings.TrimSpace(codesStr) == "" {
-		return []int{200}, nil
-	}
-	parts := strings.Split(codesStr, ",")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			c, err := strconv.Atoi(p)
-			if err != nil {
-				return nil, err
-			}
-			codes = append(codes, c)
-		}
-	}
-	if len(codes) == 0 {
-		return []int{200}, nil
-	}
-	return codes, nil
 }
 
 func handleDeleteService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
@@ -464,10 +245,33 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-	enableWebhook := r.FormValue("enable_webhook") == "on"
-	enableTeams := r.FormValue("enable_teams") == "on"
-	enableTelegram := r.FormValue("enable_telegram") == "on"
-	enableEmail := r.FormValue("enable_email") == "on"
+	
+	providers := getNotificationProviders()
+	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
+	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
+	enableTelegram := r.FormValue("enable_telegram") == "on" && providers["telegram"]
+	enableEmail := r.FormValue("enable_email") == "on" && providers["email"]
+	enableDiscord := r.FormValue("enable_discord") == "on" && providers["discord"]
+	enableGotify := r.FormValue("enable_gotify") == "on" && providers["gotify"]
+	enablePushover := r.FormValue("enable_pushover") == "on" && providers["pushover"]
+
+	alertOnFailure := r.FormValue("alert_on_failure") == "on"
+	alertOnRecovery := r.FormValue("alert_on_recovery") == "on"
+	alertOnRestart := r.FormValue("alert_on_restart") == "on"
+
+	quietHoursStart := r.FormValue("quiet_hours_start")
+	quietHoursEnd := r.FormValue("quiet_hours_end")
+
+	repeatIntervalMin, _ := strconv.Atoi(r.FormValue("alert_repeat_interval"))
+	alertRepeatInterval := repeatIntervalMin * 60
+	if alertRepeatInterval < 0 {
+		alertRepeatInterval = 0
+	}
+
+	alertMaxRepeats, _ := strconv.Atoi(r.FormValue("alert_max_repeats"))
+	if alertMaxRepeats < 0 {
+		alertMaxRepeats = 0
+	}
 
 	_ = config.UpdateConfig(func(c *config.Config) {
 		c.Services[idx].Name = newName
@@ -482,6 +286,16 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		c.Services[idx].EnableTeams = enableTeams
 		c.Services[idx].EnableTelegram = enableTelegram
 		c.Services[idx].EnableEmail = enableEmail
+		c.Services[idx].EnableDiscord = enableDiscord
+		c.Services[idx].EnableGotify = enableGotify
+		c.Services[idx].EnablePushover = enablePushover
+		c.Services[idx].QuietHoursStart = quietHoursStart
+		c.Services[idx].QuietHoursEnd = quietHoursEnd
+		c.Services[idx].AlertOnFailure = alertOnFailure
+		c.Services[idx].AlertOnRecovery = alertOnRecovery
+		c.Services[idx].AlertOnRestart = alertOnRestart
+		c.Services[idx].AlertRepeatInterval = alertRepeatInterval
+		c.Services[idx].AlertMaxRepeats = alertMaxRepeats
 	})
 
 	if oldName != newName {
@@ -513,7 +327,12 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	action := r.FormValue("form_action")
 	monitor.LogAction(username, fmt.Sprintf("Reached update_service endpoint for index %d with action %s", idx, action), "user")
 
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		monitor.LogAction(username, fmt.Sprintf("System error loading config: %v", err), "error")
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		monitor.LogAction(username, fmt.Sprintf("Invalid service index %d", idx), "error")
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
@@ -529,7 +348,6 @@ func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 		handleUpdateService(w, r, username, idx, cfg)
 		return
 	}
-
 }
 
 func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
@@ -540,7 +358,11 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested force restart for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -548,7 +370,6 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 
 	svc := cfg.Services[idx]
 
-	// run in background to not block HTTP request
 	go func(names, name string, user string) {
 		containers := strings.Split(names, ",")
 		restartSucceeded := true
@@ -594,7 +415,11 @@ func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested pause/resume monitoring for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -626,7 +451,11 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Requested logs for service index %d", idx), "user")
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		renderConfigWithError(w, "System error loading config")
+		return
+	}
 	if idx < 0 || idx >= len(cfg.Services) {
 		renderConfigWithError(w, fmt.Sprintf("Invalid service index: %d", idx))
 		return
@@ -659,13 +488,17 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 
 	cfg, _ = config.LoadConfig()
 	status, _ := config.LoadStatus()
+	if cfg == nil || status == nil {
+		http.Error(w, "System error loading config", http.StatusInternalServerError)
+		return
+	}
 
-	// Similar duration computation to ConfigGET could be factored out, omitting here for brevity as this is just explicit data display
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{
-		Services: cfg.Services,
-		Status:   *status,
-		Logs:     logsBuilder.String(),
-		LogsSvc:  svc.Name,
+		Services:              cfg.Services,
+		Status:                *status,
+		Logs:                  logsBuilder.String(),
+		LogsSvc:               svc.Name,
+		NotificationProviders: getNotificationProviders(),
 	})
 }
 
@@ -690,6 +523,11 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 			EnableTeams:         false,
 			EnableTelegram:      false,
 			EnableEmail:         false,
+			AlertOnFailure:      true,
+			AlertOnRecovery:     true,
+			AlertOnRestart:      true,
+			AlertRepeatInterval: 0,
+			AlertMaxRepeats:     0,
 		})
 	})
 
@@ -713,162 +551,4 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
-}
-
-// APIServiceStatus extends config.ServiceStatus with history for API responses
-type APIServiceStatus struct {
-	config.ServiceStatus
-	History []string `json:"history"`
-}
-
-// APIStatusResponse represents the structured status response for the API
-type APIStatusResponse struct {
-	Services []APIServiceStatus `json:"services"`
-}
-
-// APIViewData is the top-level structure for the API status response
-type APIViewData struct {
-	Services []config.ServiceConfig `json:"services"`
-	Status   APIStatusResponse      `json:"status"`
-}
-
-// JSON Endpoint for Status Fetching
-func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
-	cfg, _ := config.LoadConfig()
-	status, _ := config.LoadStatus()
-
-	currentTime := time.Now().Unix()
-
-	for i, svc := range cfg.Services {
-		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
-		}
-	}
-
-	apiStatus := APIStatusResponse{}
-	for i, s := range status.Services {
-		history := []string{}
-		if i < len(cfg.Services) {
-			history = monitor.GetHistory(cfg.Services[i].Name)
-		}
-		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
-			ServiceStatus: s,
-			History:       history,
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	data := APIViewData{
-		Services: cfg.Services,
-		Status:   apiStatus,
-	}
-
-	jsonBytes, err := json.Marshal(data)
-	if err == nil {
-		_, _ = w.Write(jsonBytes)
-	} else {
-		http.Error(w, "Server error rendering JSON", http.StatusInternalServerError)
-	}
-}
-
-// JSON Endpoint for live streaming logs via SSE
-func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
-	idx, ok := parseIndex(w, r)
-	if !ok {
-		return
-	}
-
-	cfg, _ := config.LoadConfig()
-	if idx < 0 || idx >= len(cfg.Services) {
-		http.Error(w, "Invalid service index", http.StatusBadRequest)
-		return
-	}
-
-	svc := cfg.Services[idx]
-	containers := strings.Split(svc.ContainerNames, ",")
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	var targetContainer string
-	for _, c := range containers {
-		c = strings.TrimSpace(c)
-		if c != "" {
-			if config.IsValidContainerName(c) {
-				targetContainer = c
-				break
-			} else {
-				monitor.LogAction("System", fmt.Sprintf("Invalid container name blocked from log stream: %s", c), "error")
-			}
-		}
-	}
-
-	if targetContainer == "" {
-		fmt.Fprintf(w, "data: No valid containers found\n\n")
-		flusher.Flush()
-		return
-	}
-
-	// #nosec G204 G702
-	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
-		flusher.Flush()
-		return
-	}
-
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(w, "data: Error starting logs command\n\n")
-		flusher.Flush()
-		return
-	}
-
-	buf := make([]byte, 1024)
-	for {
-		n, err := stdoutPipe.Read(buf)
-		if n > 0 {
-			lines := strings.Split(string(buf[:n]), "\n")
-			for _, line := range lines {
-				if line != "" {
-					fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
-				}
-			}
-			flusher.Flush()
-		}
-		if err != nil {
-			break
-		}
-	}
-	_ = cmd.Wait()
 }

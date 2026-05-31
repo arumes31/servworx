@@ -50,6 +50,49 @@ type ServiceConfig struct {
 	EnableTeams         bool   `json:"enable_teams"`
 	EnableTelegram      bool   `json:"enable_telegram"`
 	EnableEmail         bool   `json:"enable_email"`
+	AlertOnFailure      bool   `json:"alert_on_failure"`
+	AlertOnRecovery     bool   `json:"alert_on_recovery"`
+	AlertOnRestart      bool   `json:"alert_on_restart"`
+	AlertRepeatInterval int    `json:"alert_repeat_interval"`
+	AlertMaxRepeats     int    `json:"alert_max_repeats"`
+	EnableDiscord       bool   `json:"enable_discord"`
+	EnableGotify        bool   `json:"enable_gotify"`
+	EnablePushover      bool   `json:"enable_pushover"`
+	QuietHoursStart     string `json:"quiet_hours_start"`
+	QuietHoursEnd       string `json:"quiet_hours_end"`
+	AlertSnoozeUntil    int64  `json:"alert_snooze_until"`
+}
+
+// UnmarshalJSON implements a custom JSON unmarshaller to ensure new boolean settings default to true for backward compatibility.
+func (s *ServiceConfig) UnmarshalJSON(data []byte) error {
+	type Alias ServiceConfig
+	aux := &struct {
+		AlertOnFailure  *bool `json:"alert_on_failure"`
+		AlertOnRecovery *bool `json:"alert_on_recovery"`
+		AlertOnRestart  *bool `json:"alert_on_restart"`
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.AlertOnFailure == nil {
+		s.AlertOnFailure = true
+	} else {
+		s.AlertOnFailure = *aux.AlertOnFailure
+	}
+	if aux.AlertOnRecovery == nil {
+		s.AlertOnRecovery = true
+	} else {
+		s.AlertOnRecovery = *aux.AlertOnRecovery
+	}
+	if aux.AlertOnRestart == nil {
+		s.AlertOnRestart = true
+	} else {
+		s.AlertOnRestart = *aux.AlertOnRestart
+	}
+	return nil
 }
 
 type Status struct {
@@ -66,6 +109,8 @@ type ServiceStatus struct {
 	DownFor          *string `json:"down_for"`
 	UpFor            *string `json:"up_for"`
 	TimeToRestart    string  `json:"time_to_restart,omitempty"` // populated for the UI
+	LastAlertTime    *int64  `json:"last_alert_time,omitempty"`
+	AlertCount       int     `json:"alert_count"`
 }
 
 // LoadConfig reads the configuration file. It creates one with defaults if it doesn't exist.

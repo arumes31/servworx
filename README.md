@@ -259,21 +259,27 @@ Since `servworx` communicates directly with the Docker Engine to perform self-he
 
 ```
 .
-├── main.go                       # Web server and monitor entry point
-├── Dockerfile                    # Multi-stage optimized Docker build instructions
-├── docker-compose.yaml           # Local container orchestration file
-├── docker-compose.ghcr.example.yaml # Pre-built registry orchestration example
-├── LICENSE                       # MIT License file
-├── go.mod                        # Go module file
+├── cmd/                          # Command-line entry points
+│   └── servworx/
+│       └── main.go               # Web server and monitor entry point
+├── internal/                     # Private Go packages
+│   ├── auth/                     # Session and security handling
+│   ├── config/                   # Read, write, and load configurations
+│   ├── handlers/                 # HTTP controller logic split by domain
+│   │   ├── api_handlers.go       # JSON/SSE endpoints
+│   │   ├── web_handlers.go       # HTML page handlers
+│   │   ├── helpers.go            # UI formatting and logic helpers
+│   │   ├── middleware.go         # Authentication gate
+│   │   └── routes.go             # Central router registration
+│   └── monitor/                  # Polling engine and Docker restart worker
 ├── templates/                    # Go HTML layout templates
 │   ├── change_password.html      # Authentication profile page
 │   ├── config.html               # Main live monitoring dashboard
 │   └── login.html                # Web portal login screen
-├── internal/                     # Go packages
-│   ├── auth/                     # Session and security handling
-│   ├── config/                   # Read, write, and load configurations
-│   ├── handlers/                 # HTTP controller routes and actions
-│   └── monitor/                  # Polling engine and Docker restart worker
+├── Dockerfile                    # Multi-stage optimized Docker build instructions
+├── docker-compose.yaml           # Local container orchestration file
+├── LICENSE                       # MIT License file
+├── go.mod                        # Go module file
 └── README.md                     # Modern project overview (this file)
 ```
 

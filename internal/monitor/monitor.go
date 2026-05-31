@@ -131,7 +131,9 @@ func restartContainers(containerNames, serviceName string) int64 {
 	if cfg, err := config.LoadConfig(); err == nil {
 		for _, svc := range cfg.Services {
 			if svc.Name == serviceName {
-				SendNotification(svc, "Down", fmt.Sprintf("Auto-restart initiated for containers: %s", containerNames))
+				if svc.AlertOnRestart {
+					SendNotification(svc, "Down", fmt.Sprintf("Auto-restart initiated for containers: %s", containerNames))
+				}
 				break
 			}
 		}
@@ -217,26 +219,100 @@ func updateServiceStatus(serviceName, status string) {
 				if status != oldStatusStr {
 					nowStr := time.Now().Format("2006-01-02 15:04:05")
 					var transitionMsg string
-					if status == "Down" && oldStatusStr == "Up" {
+					var shouldSend bool
+					if status == "Down" && (oldStatusStr == "Up" || oldStatusStr == "Unknown") {
 						s.Services[i].DownSince = &nowStr
 						s.Services[i].UpSince = nil
 						s.Services[i].LastFailure = &nowStr
 						LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", serviceName, nowStr), "system")
 						transitionMsg = fmt.Sprintf("Service %s went Down! Integrity checks failed.", serviceName)
-					} else if status == "Up" && oldStatusStr == "Down" {
+
+						// Retrieve config to check failure alerting rules
+						if cfg, err := config.LoadConfig(); err == nil {
+							for _, svc := range cfg.Services {
+								if svc.Name == serviceName {
+									shouldSend = svc.AlertOnFailure
+									break
+								}
+							}
+						}
+
+						// Initialize/Reset tracking for down alerts
+						nowUnix := time.Now().Unix()
+						s.Services[i].LastAlertTime = &nowUnix
+						s.Services[i].AlertCount = 1
+
+					} else if status == "Up" && (oldStatusStr == "Down" || oldStatusStr == "Unknown") {
 						s.Services[i].UpSince = &nowStr
 						s.Services[i].DownSince = nil
 						LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", serviceName, nowStr), "system")
 						transitionMsg = fmt.Sprintf("Service %s recovered and is now Up.", serviceName)
+
+						// Retrieve config to check recovery alerting rules
+						if cfg, err := config.LoadConfig(); err == nil {
+							for _, svc := range cfg.Services {
+								if svc.Name == serviceName {
+									shouldSend = svc.AlertOnRecovery
+									break
+								}
+							}
+						}
+
+						// Reset down alert tracking
+						s.Services[i].LastAlertTime = nil
+						s.Services[i].AlertCount = 0
 					}
 
-					if transitionMsg != "" {
+					if transitionMsg != "" && shouldSend {
 						if cfg, err := config.LoadConfig(); err == nil {
 							for _, svc := range cfg.Services {
 								if svc.Name == serviceName {
 									SendNotification(svc, status, transitionMsg)
 									break
 								}
+							}
+						}
+					}
+				} else if status == "Down" {
+					// Service remains down, check for repeat alerts!
+					if cfg, err := config.LoadConfig(); err == nil {
+						for _, svc := range cfg.Services {
+							if svc.Name == serviceName {
+								if svc.AlertRepeatInterval > 0 {
+									nowUnix := time.Now().Unix()
+									lastAlert := int64(0)
+									if s.Services[i].LastAlertTime != nil {
+										lastAlert = *s.Services[i].LastAlertTime
+									}
+
+									// If LastAlertTime is not set yet, or repeat interval elapsed
+									if lastAlert == 0 || (nowUnix-lastAlert) >= int64(svc.AlertRepeatInterval) {
+										// Check max alerts cap
+										if svc.AlertMaxRepeats == 0 || s.Services[i].AlertCount < svc.AlertMaxRepeats+1 {
+											if svc.AlertOnFailure {
+												canDispatch := true
+												if svc.AlertSnoozeUntil > time.Now().Unix() || isQuietHours(time.Now(), svc.QuietHoursStart, svc.QuietHoursEnd) {
+													canDispatch = false
+												}
+												if canDispatch {
+													s.Services[i].LastAlertTime = &nowUnix
+													s.Services[i].AlertCount++
+
+													downStr := "unknown time"
+													if s.Services[i].DownSince != nil {
+														downStr = *s.Services[i].DownSince
+													}
+
+													repeatMsg := fmt.Sprintf("[Repeat Alert #%d] Service %s has been Down since %s.",
+														s.Services[i].AlertCount-1, serviceName, downStr)
+
+													SendNotification(svc, "Down", repeatMsg)
+												}
+											}
+										}
+									}
+								}
+								break
 							}
 						}
 					}

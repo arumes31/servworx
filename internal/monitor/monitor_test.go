@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/arumes31/servworx/internal/config"
 )
@@ -182,3 +183,95 @@ func TestHandleServiceFailure(t *testing.T) {
 		t.Errorf("expected lastRestart %d to be unchanged, got %d", lastRestart, newRestart)
 	}
 }
+
+func TestAlertingRules(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := config.ConfigDir
+	config.SetConfigDir(tmpDir)
+	t.Cleanup(func() { config.SetConfigDir(originalDir) })
+
+	serviceName := "test-alert-service"
+
+	// Create Config with alert settings
+	cfg := &config.Config{
+		Services: []config.ServiceConfig{
+			{
+				Name:                serviceName,
+				AlertOnFailure:      true,
+				AlertOnRecovery:     true,
+				AlertRepeatInterval: 10, // 10 seconds repeat
+				AlertMaxRepeats:     2,  // Max 2 repeats
+			},
+		},
+	}
+	_ = config.SaveConfig(cfg)
+
+	_ = config.UpdateStatus(func(s *config.Status) {
+		s.Services = []config.ServiceStatus{
+			{Name: serviceName, Status: "Up", LastStableStatus: "Up"},
+		}
+	})
+
+	// 1. Initial Transition Up -> Down
+	updateServiceStatus(serviceName, "Down")
+	status, _ := config.LoadStatus()
+	if status.Services[0].AlertCount != 1 {
+		t.Errorf("expected alert count 1, got %d", status.Services[0].AlertCount)
+	}
+	if status.Services[0].LastAlertTime == nil {
+		t.Error("expected LastAlertTime to be set")
+	}
+
+	// 2. Repeat check before interval elapsed (should NOT increment alert count)
+	updateServiceStatus(serviceName, "Down")
+	status, _ = config.LoadStatus()
+	if status.Services[0].AlertCount != 1 {
+		t.Errorf("expected alert count to remain 1, got %d", status.Services[0].AlertCount)
+	}
+
+	// 3. Force last alert time back to mock elapsed interval
+	_ = config.UpdateStatus(func(s *config.Status) {
+		pastTime := time.Now().Unix() - 15
+		s.Services[0].LastAlertTime = &pastTime
+	})
+
+	// Repeat check after interval elapsed (should increment alert count to 2, representing first repeat alert)
+	updateServiceStatus(serviceName, "Down")
+	status, _ = config.LoadStatus()
+	if status.Services[0].AlertCount != 2 {
+		t.Errorf("expected alert count 2 after repeat, got %d", status.Services[0].AlertCount)
+	}
+
+	// 4. Force last alert time back again for second repeat (limit is 2, so this repeat alert #2 is allowed)
+	_ = config.UpdateStatus(func(s *config.Status) {
+		pastTime := time.Now().Unix() - 15
+		s.Services[0].LastAlertTime = &pastTime
+	})
+	updateServiceStatus(serviceName, "Down")
+	status, _ = config.LoadStatus()
+	if status.Services[0].AlertCount != 3 {
+		t.Errorf("expected alert count 3, got %d", status.Services[0].AlertCount)
+	}
+
+	// 5. Force last alert time back again for third repeat (limit is 2, so this should exceed max repeats limit of 2 and NOT increment further)
+	_ = config.UpdateStatus(func(s *config.Status) {
+		pastTime := time.Now().Unix() - 15
+		s.Services[0].LastAlertTime = &pastTime
+	})
+	updateServiceStatus(serviceName, "Down")
+	status, _ = config.LoadStatus()
+	if status.Services[0].AlertCount != 3 {
+		t.Errorf("expected alert count to stay capped at 3, got %d", status.Services[0].AlertCount)
+	}
+
+	// 6. Recover Down -> Up
+	updateServiceStatus(serviceName, "Up")
+	status, _ = config.LoadStatus()
+	if status.Services[0].AlertCount != 0 {
+		t.Errorf("expected alert count reset to 0, got %d", status.Services[0].AlertCount)
+	}
+	if status.Services[0].LastAlertTime != nil {
+		t.Error("expected LastAlertTime to be nil after recovery")
+	}
+}
+

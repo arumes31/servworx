@@ -268,3 +268,89 @@ func TestSendEmailMockSMTP(t *testing.T) {
 		t.Errorf("expected email content to contain Subject, got: %s", emailContent)
 	}
 }
+
+func TestSendDiscord(t *testing.T) {
+	var receivedPayload map[string]interface{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusNoContent) // Discord webhook returns 204
+	}))
+	defer ts.Close()
+
+	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	defer os.Unsetenv("NOTIFICATION_DISCORD_URL")
+
+	svc := config.ServiceConfig{
+		Name:           "DiscordService",
+		WebsiteURL:     "http://example.com",
+		ContainerNames: "web",
+	}
+
+	err := sendDiscord(svc, "Down", "Integrity checks failed.")
+	if err != nil {
+		t.Fatalf("sendDiscord failed: %v", err)
+	}
+
+	embeds := receivedPayload["embeds"].([]interface{})
+	embed := embeds[0].(map[string]interface{})
+	if !strings.Contains(embed["title"].(string), "DiscordService") {
+		t.Errorf("expected embed title to contain DiscordService, got %v", embed["title"])
+	}
+}
+
+func TestSendGotify(t *testing.T) {
+	var receivedPayload map[string]interface{}
+	var requestURL string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestURL = r.URL.String()
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "mock-token")
+	defer os.Unsetenv("NOTIFICATION_GOTIFY_URL")
+	defer os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+
+	svc := config.ServiceConfig{
+		Name:           "GotifyService",
+		WebsiteURL:     "http://example.com",
+		ContainerNames: "web",
+	}
+
+	err := sendGotify(svc, "Down", "Integrity checks failed.")
+	if err != nil {
+		t.Fatalf("sendGotify failed: %v", err)
+	}
+
+	if !strings.Contains(requestURL, "token=mock-token") {
+		t.Errorf("expected request URL to contain token=mock-token, got %s", requestURL)
+	}
+	if !strings.Contains(receivedPayload["title"].(string), "GotifyService") {
+		t.Errorf("expected title to contain GotifyService, got %v", receivedPayload["title"])
+	}
+}
+
+func TestSendPushoverMissing(t *testing.T) {
+	os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
+	os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+
+	svc := config.ServiceConfig{Name: "PushoverSvc"}
+	err := sendPushover(svc, "Down", "Err")
+	if err == nil {
+		t.Error("expected error due to missing Pushover configuration")
+	}
+}
+
+func TestIsQuietHours(t *testing.T) {
+	if !isQuietHours(time.Now(), "00:00", "23:59") {
+		t.Error("expected 00:00 to 23:59 to be quiet hours")
+	}
+	if isQuietHours(time.Now(), "", "") {
+		t.Error("expected empty quiet hours start/end to be inactive")
+	}
+}
+
