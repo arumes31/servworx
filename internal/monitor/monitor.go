@@ -376,7 +376,11 @@ func monitorService(svc config.ServiceConfig) {
 
 	lastRestart := readLastRestart(svc.Name)
 
-	ticker := time.NewTicker(time.Duration(svc.Interval) * time.Second)
+	interval := svc.Interval
+	if interval <= 0 {
+		interval = 60 // Default to 60 seconds if invalid
+	}
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
 
 	for {

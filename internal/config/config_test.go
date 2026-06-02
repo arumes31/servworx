@@ -146,6 +146,7 @@ func TestAtomicUpdates(t *testing.T) {
 }
 
 func TestLoadNonExistent(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -163,6 +164,7 @@ func TestLoadNonExistent(t *testing.T) {
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -186,6 +188,7 @@ func TestLoadInvalidJSON(t *testing.T) {
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -217,6 +220,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 }
 
 func TestUpdateStatusNewFile(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -245,6 +249,7 @@ func TestUpdateStatusNewFile(t *testing.T) {
 }
 
 func TestUpdateConfigNewFile(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -273,6 +278,7 @@ func TestUpdateConfigNewFile(t *testing.T) {
 }
 
 func TestUpdateInvalidJSON(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -292,5 +298,67 @@ func TestUpdateInvalidJSON(t *testing.T) {
 	err = UpdateStatus(func(s *Status) {})
 	if err == nil {
 		t.Error("Expected error when updating invalid status JSON, got nil")
+	}
+}
+func TestConfigCaching(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := ConfigDir
+	SetConfigDir(tmpDir)
+	clearCache()
+	t.Cleanup(func() {
+		SetConfigDir(originalDir)
+		clearCache()
+	})
+
+	cfg := &Config{
+		Users: map[string]string{"admin": "hash"},
+		Services: []ServiceConfig{
+			{
+				Name: "Service1",
+				AcceptedStatusCodes: []int{200},
+			},
+		},
+	}
+
+	if err := SaveConfig(cfg); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	// Load should come from cache
+	loaded1, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig 1 failed: %v", err)
+	}
+
+	// Manually corrupt the file on disk
+	path := filepath.Join(tmpDir, ConfigFile)
+	if err := os.WriteFile(path, []byte("corrupted json"), 0600); err != nil {
+		t.Fatalf("Failed to corrupt config file: %v", err)
+	}
+
+	// Load should still succeed because it's cached
+	loaded2, err := LoadConfig()
+	if err != nil {
+		t.Errorf("LoadConfig 2 failed after disk corruption (should have been cached): %v", err)
+	}
+
+	if !jsonEqual(loaded1, loaded2) {
+		t.Errorf("Cached config changed unexpectedly")
+	}
+
+	// UpdateConfig should refresh the cache
+	err = UpdateConfig(func(c *Config) {
+		c.Services[0].Name = "UpdatedService"
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfig failed: %v", err)
+	}
+
+	loaded3, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig 3 failed: %v", err)
+	}
+	if loaded3.Services[0].Name != "UpdatedService" {
+		t.Errorf("Expected UpdatedService, got %s", loaded3.Services[0].Name)
 	}
 }
