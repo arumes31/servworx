@@ -294,3 +294,41 @@ func TestUpdateInvalidJSON(t *testing.T) {
 		t.Error("Expected error when updating invalid status JSON, got nil")
 	}
 }
+
+func TestSaveConfigError(t *testing.T) {
+	// Create a read-only directory
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+		t.Fatalf("Failed to create read-only directory: %v", err)
+	}
+
+	originalDir := ConfigDir
+	SetConfigDir(filepath.Join(readOnlyDir, "subdir")) // MkdirAll should fail
+	defer SetConfigDir(originalDir)
+
+	cfg := &Config{Users: map[string]string{"admin": "hash"}}
+	err := SaveConfig(cfg)
+	if err == nil {
+		t.Error("Expected error when saving to read-only directory, got nil")
+	}
+}
+
+func TestSaveStatusError(t *testing.T) {
+	// Create a read-only directory
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+		t.Fatalf("Failed to create read-only directory: %v", err)
+	}
+
+	originalDir := ConfigDir
+	SetConfigDir(filepath.Join(readOnlyDir, "subdir")) // MkdirAll should fail
+	defer SetConfigDir(originalDir)
+
+	status := &Status{Services: []ServiceStatus{{Name: "Service1", Status: "Up"}}}
+	err := SaveStatus(status)
+	if err == nil {
+		t.Error("Expected error when saving to read-only directory, got nil")
+	}
+}
