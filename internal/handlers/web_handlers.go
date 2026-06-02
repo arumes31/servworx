@@ -161,28 +161,7 @@ func HandleConfigGET(w http.ResponseWriter, r *http.Request) {
 
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			_ = enrichServiceStatus(svc, &status.Services[i], currentTime)
 		}
 	}
 
@@ -491,6 +470,13 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 	if cfg == nil || status == nil {
 		http.Error(w, "System error loading config", http.StatusInternalServerError)
 		return
+	}
+
+	currentTime := time.Now().Unix()
+	for i, svc := range cfg.Services {
+		if i < len(status.Services) {
+			_ = enrichServiceStatus(svc, &status.Services[i], currentTime)
+		}
 	}
 
 	_ = templates.ExecuteTemplate(w, "config.html", ConfigViewData{

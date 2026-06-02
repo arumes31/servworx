@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -154,4 +155,29 @@ func parseStatusCodes(codesStr string) ([]int, error) {
 		return []int{200}, nil
 	}
 	return codes, nil
+}
+
+func enrichServiceStatus(svc config.ServiceConfig, s *config.ServiceStatus, currentTime int64) []string {
+	s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
+	if s.DownSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
+		if err == nil {
+			df := formatDuration(currentTime - t.Unix())
+			s.DownFor = &df
+		} else {
+			errStr := "Invalid timestamp"
+			s.DownFor = &errStr
+		}
+	}
+	if s.UpSince != nil {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
+		if err == nil {
+			uf := formatDuration(currentTime - t.Unix())
+			s.UpFor = &uf
+		} else {
+			errStr := "Invalid timestamp"
+			s.UpFor = &errStr
+		}
+	}
+	return monitor.GetHistory(svc.Name)
 }

@@ -40,44 +40,15 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	currentTime := time.Now().Unix()
-
+	apiStatus := APIStatusResponse{}
 	for i, svc := range cfg.Services {
 		if i < len(status.Services) {
-			s := &status.Services[i]
-			s.TimeToRestart = formatDuration(int64(svc.Interval * svc.Retries))
-			if s.DownSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.DownSince, time.Local)
-				if err == nil {
-					df := formatDuration(currentTime - t.Unix())
-					s.DownFor = &df
-				} else {
-					errStr := "Invalid timestamp"
-					s.DownFor = &errStr
-				}
-			}
-			if s.UpSince != nil {
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", *s.UpSince, time.Local)
-				if err == nil {
-					uf := formatDuration(currentTime - t.Unix())
-					s.UpFor = &uf
-				} else {
-					errStr := "Invalid timestamp"
-					s.UpFor = &errStr
-				}
-			}
+			history := enrichServiceStatus(svc, &status.Services[i], currentTime)
+			apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
+				ServiceStatus: status.Services[i],
+				History:       history,
+			})
 		}
-	}
-
-	apiStatus := APIStatusResponse{}
-	for i, s := range status.Services {
-		history := []string{}
-		if i < len(cfg.Services) {
-			history = monitor.GetHistory(cfg.Services[i].Name)
-		}
-		apiStatus.Services = append(apiStatus.Services, APIServiceStatus{
-			ServiceStatus: s,
-			History:       history,
-		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
