@@ -215,52 +215,30 @@ func handleDeleteService(w http.ResponseWriter, r *http.Request, username string
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
-func handleUpdateService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+
+func extractServiceConfig(r *http.Request) (config.ServiceConfig, error) {
 	retries, err1 := strconv.Atoi(r.FormValue("retries"))
 	interval, err2 := strconv.Atoi(r.FormValue("interval"))
 	gracePeriod, err3 := strconv.Atoi(r.FormValue("grace_period"))
 
 	if err1 != nil || err2 != nil || err3 != nil || retries < 1 || interval < 1 || gracePeriod < 1 {
-		monitor.LogAction(username, "Invalid numeric inputs for service", "error")
-		renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
-		return
+		return config.ServiceConfig{}, fmt.Errorf("Retries, interval, and grace period must be positive integers")
 	}
 
 	codes, err := parseStatusCodes(r.FormValue("accepted_status_codes"))
 	if err != nil {
-		renderConfigWithError(w, "Invalid status codes")
-		return
+		return config.ServiceConfig{}, fmt.Errorf("Invalid status codes")
 	}
 
 	containerNames := r.FormValue("container_names")
 	for _, c := range strings.Split(containerNames, ",") {
 		c = strings.TrimSpace(c)
 		if c != "" && !config.IsValidContainerName(c) {
-			monitor.LogAction(username, fmt.Sprintf("Invalid container name provided: %s", c), "error")
-			renderConfigWithError(w, fmt.Sprintf("Invalid container name: %s", c))
-			return
+			return config.ServiceConfig{}, fmt.Errorf("Invalid container name: %s", c)
 		}
 	}
 
-	oldName := cfg.Services[idx].Name
-	newName := r.FormValue("name")
-	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-	
 	providers := getNotificationProviders()
-	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
-	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
-	enableTelegram := r.FormValue("enable_telegram") == "on" && providers["telegram"]
-	enableEmail := r.FormValue("enable_email") == "on" && providers["email"]
-	enableDiscord := r.FormValue("enable_discord") == "on" && providers["discord"]
-	enableGotify := r.FormValue("enable_gotify") == "on" && providers["gotify"]
-	enablePushover := r.FormValue("enable_pushover") == "on" && providers["pushover"]
-
-	alertOnFailure := r.FormValue("alert_on_failure") == "on"
-	alertOnRecovery := r.FormValue("alert_on_recovery") == "on"
-	alertOnRestart := r.FormValue("alert_on_restart") == "on"
-
-	quietHoursStart := r.FormValue("quiet_hours_start")
-	quietHoursEnd := r.FormValue("quiet_hours_end")
 
 	repeatIntervalMin, _ := strconv.Atoi(r.FormValue("alert_repeat_interval"))
 	alertRepeatInterval := repeatIntervalMin * 60
@@ -273,47 +251,67 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		alertMaxRepeats = 0
 	}
 
+	return config.ServiceConfig{
+		Name:                r.FormValue("name"),
+		WebsiteURL:          r.FormValue("website_url"),
+		ContainerNames:      containerNames,
+		Retries:             retries,
+		Interval:            interval,
+		GracePeriod:         gracePeriod,
+		AcceptedStatusCodes: codes,
+		InsecureSkipVerify:  r.FormValue("insecure_skip_verify") == "on",
+		EnableWebhook:       r.FormValue("enable_webhook") == "on" && providers["webhook"],
+		EnableTeams:         r.FormValue("enable_teams") == "on" && providers["teams"],
+		EnableTelegram:      r.FormValue("enable_telegram") == "on" && providers["telegram"],
+		EnableEmail:         r.FormValue("enable_email") == "on" && providers["email"],
+		EnableDiscord:       r.FormValue("enable_discord") == "on" && providers["discord"],
+		EnableGotify:        r.FormValue("enable_gotify") == "on" && providers["gotify"],
+		EnablePushover:      r.FormValue("enable_pushover") == "on" && providers["pushover"],
+		QuietHoursStart:     r.FormValue("quiet_hours_start"),
+		QuietHoursEnd:       r.FormValue("quiet_hours_end"),
+		AlertOnFailure:      r.FormValue("alert_on_failure") == "on",
+		AlertOnRecovery:     r.FormValue("alert_on_recovery") == "on",
+		AlertOnRestart:      r.FormValue("alert_on_restart") == "on",
+		AlertRepeatInterval: alertRepeatInterval,
+		AlertMaxRepeats:     alertMaxRepeats,
+	}, nil
+}
+
+func updateServiceStatusName(oldName, newName string) {
+	if oldName == newName {
+		return
+	}
+	_ = config.UpdateStatus(func(s *config.Status) {
+		for i := range s.Services {
+			if s.Services[i].Name == oldName {
+				s.Services[i].Name = newName
+				monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
+				break
+			}
+		}
+	})
+}
+
+func handleUpdateService(w http.ResponseWriter, r *http.Request, username string, idx int, cfg *config.Config) {
+	newSvc, err := extractServiceConfig(r)
+	if err != nil {
+		monitor.LogAction(username, fmt.Sprintf("Validation error: %v", err), "error")
+		renderConfigWithError(w, err.Error())
+		return
+	}
+
+	oldName := cfg.Services[idx].Name
 	_ = config.UpdateConfig(func(c *config.Config) {
-		c.Services[idx].Name = newName
-		c.Services[idx].WebsiteURL = r.FormValue("website_url")
-		c.Services[idx].ContainerNames = containerNames
-		c.Services[idx].Retries = retries
-		c.Services[idx].Interval = interval
-		c.Services[idx].GracePeriod = gracePeriod
-		c.Services[idx].AcceptedStatusCodes = codes
-		c.Services[idx].InsecureSkipVerify = insecureSkip
-		c.Services[idx].EnableWebhook = enableWebhook
-		c.Services[idx].EnableTeams = enableTeams
-		c.Services[idx].EnableTelegram = enableTelegram
-		c.Services[idx].EnableEmail = enableEmail
-		c.Services[idx].EnableDiscord = enableDiscord
-		c.Services[idx].EnableGotify = enableGotify
-		c.Services[idx].EnablePushover = enablePushover
-		c.Services[idx].QuietHoursStart = quietHoursStart
-		c.Services[idx].QuietHoursEnd = quietHoursEnd
-		c.Services[idx].AlertOnFailure = alertOnFailure
-		c.Services[idx].AlertOnRecovery = alertOnRecovery
-		c.Services[idx].AlertOnRestart = alertOnRestart
-		c.Services[idx].AlertRepeatInterval = alertRepeatInterval
-		c.Services[idx].AlertMaxRepeats = alertMaxRepeats
+		c.Services[idx] = newSvc
 	})
 
-	if oldName != newName {
-		_ = config.UpdateStatus(func(s *config.Status) {
-			for i := range s.Services {
-				if s.Services[i].Name == oldName {
-					s.Services[i].Name = newName
-					monitor.LogAction("System", fmt.Sprintf("Updated status name from %s to %s", oldName, newName), "system")
-					break
-				}
-			}
-		})
-	}
+	updateServiceStatusName(oldName, newSvc.Name)
 
 	monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
 	monitor.RestartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
+
 
 func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
