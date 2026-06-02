@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -383,9 +384,12 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 				continue
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			// #nosec G204
-			cmd := exec.Command("docker", "restart", c)
-			if err := cmd.Run(); err != nil {
+			cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
+			err := cmd.Run()
+			cancel()
+			if err != nil {
 				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
 				restartSucceeded = false
 			}
@@ -474,7 +478,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			// #nosec G204
-			cmd := exec.Command("docker", "logs", "--tail", "10", c)
+			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", "--", c)
 			out, _ := cmd.CombinedOutput()
 			outStr := string(out)
 			if outStr == "" {

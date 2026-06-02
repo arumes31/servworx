@@ -95,6 +95,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {
 		return
@@ -127,7 +128,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 				targetContainer = c
 				break
 			} else {
-				monitor.LogAction("System", fmt.Sprintf("Invalid container name blocked from log stream: %s", c), "error")
+				monitor.LogAction(username, fmt.Sprintf("Invalid container name blocked from log stream: %s", c), "error")
 			}
 		}
 	}
@@ -139,7 +140,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// #nosec G204 G702
-	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", targetContainer)
+	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", "--", targetContainer)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		fmt.Fprintf(w, "data: Error getting logs pipe\n\n")

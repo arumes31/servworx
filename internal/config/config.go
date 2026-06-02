@@ -18,7 +18,7 @@ var (
 	statusMutex sync.RWMutex
 
 	// ContainerNameRegex defines valid characters for a Docker container name.
-	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 )
 
 // IsValidContainerName checks if a string is a valid Docker container name.
