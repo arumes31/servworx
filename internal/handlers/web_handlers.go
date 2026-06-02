@@ -385,7 +385,7 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			// #nosec G204
+			// #nosec G204 G702
 			cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
 			err := cmd.Run()
 			cancel()
@@ -477,7 +477,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
 				continue
 			}
-			// #nosec G204
+			// #nosec G204 G702
 			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", "--", c)
 			out, _ := cmd.CombinedOutput()
 			outStr := string(out)
