@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"sync"
 	"time"
 )
 
@@ -170,4 +171,45 @@ func TestSetSessionCookie(t *testing.T) {
 	if !found {
 		t.Error("Session cookie not set in response")
 	}
+}
+
+func TestDestroySession_NoCookie(t *testing.T) {
+	req := httptest.NewRequest("POST", "/logout", nil)
+	w := httptest.NewRecorder()
+
+	DestroySession(w, req)
+
+	resp := w.Result()
+	cookies := resp.Cookies()
+	for _, c := range cookies {
+		if c.Name == "session_id" {
+			t.Error("Session cookie should not be set when no cookie was present in request")
+		}
+	}
+}
+
+func TestConcurrentSessions(t *testing.T) {
+	const numGoroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			username := "user"
+			sessionID := CreateSession(username)
+
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+
+			gotUser, ok := GetSession(req)
+			if !ok || gotUser != username {
+				t.Errorf("Concurrent session failed for user %d", i)
+			}
+
+			w := httptest.NewRecorder()
+			DestroySession(w, req)
+		}(i)
+	}
+	wg.Wait()
 }
