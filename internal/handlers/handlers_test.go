@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -36,21 +37,12 @@ func TestFormatDuration(t *testing.T) {
 }
 
 func TestCheckPassword(t *testing.T) {
-	// A valid bcrypt hash for "password123"
-	bcryptHash := "$2a$10$VE976zO9NGR9A/Y7s5/o6e3y3y3y3y3y3y3y3y3y3y3y3y3y3y3y3"
-
 	tests := []struct {
 		name       string
 		password   string
 		storedHash string
 		want       bool
 	}{
-		{
-			name:       "Bcrypt happy path",
-			password:   "password123",
-			storedHash: bcryptHash,
-			want:       false, // Will return false because the mock hash isn't real, but confirms prefix branching
-		},
 		{
 			name:       "Bcrypt prefix match but invalid hash",
 			password:   "any",
@@ -84,6 +76,23 @@ func TestCheckPassword(t *testing.T) {
 			}
 		})
 	}
+
+	// Dynamic tests
+	t.Run("Dynamic Bcrypt match", func(t *testing.T) {
+		pw := "dynamic-password"
+		hash, _ := hashPassword(pw)
+		if !checkPassword(pw, hash) {
+			t.Errorf("expected checkPassword to match dynamic hash")
+		}
+	})
+
+	t.Run("Dynamic Bcrypt mismatch", func(t *testing.T) {
+		pw := "dynamic-password"
+		hash, _ := hashPassword(pw)
+		if checkPassword("wrong-password", hash) {
+			t.Errorf("expected checkPassword to NOT match wrong password")
+		}
+	})
 }
 
 func TestEnrichStatusLogic(t *testing.T) {
@@ -167,4 +176,89 @@ func TestEnrichStatusLogicInvalidTimestamp(t *testing.T) {
 	if *status.DownFor != "Invalid timestamp" {
 		t.Errorf("expected DownFor to be 'Invalid timestamp', got %v", *status.DownFor)
 	}
+}
+
+func TestHashPassword(t *testing.T) {
+	password := "mysecretpassword"
+	hash1, err := hashPassword(password)
+	if err != nil {
+		t.Fatalf("hashPassword returned error: %v", err)
+	}
+	if !strings.HasPrefix(hash1, "$2") {
+		t.Errorf("expected bcrypt hash starting with $2, got: %s", hash1)
+	}
+
+	// Verify it can be checked
+	if !checkPassword(password, hash1) {
+		t.Error("expected checkPassword to verify the freshly hashed password")
+	}
+
+	// Verify salting: same password should result in different hashes
+	hash2, err := hashPassword(password)
+	if err != nil {
+		t.Fatalf("hashPassword returned error on second call: %v", err)
+	}
+	if hash1 == hash2 {
+		t.Error("expected different hashes for the same password due to salting")
+	}
+
+	// Verify empty password
+	emptyHash, err := hashPassword("")
+	if err != nil {
+		t.Fatalf("hashPassword returned error for empty password: %v", err)
+	}
+	if !checkPassword("", emptyHash) {
+		t.Error("expected checkPassword to verify empty password hash")
+	}
+}
+
+func TestMigratePasswordToBcrypt(t *testing.T) {
+	originalDir := config.ConfigDir
+	defer config.SetConfigDir(originalDir)
+
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		config.SetConfigDir(tmpDir)
+
+		username := "testuser"
+		password := "testpass"
+		sha256Hash := "13d1000806443c22b9f6262453e02058319f395569502283a21644d673628e83"
+
+		_ = config.UpdateConfig(func(cfg *config.Config) {
+			cfg.Users = map[string]string{username: sha256Hash}
+		})
+
+		migratePasswordToBcrypt(username, password)
+
+		cfg, _ := config.LoadConfig()
+		newHash := cfg.Users[username]
+
+		if !strings.HasPrefix(newHash, "$2") {
+			t.Errorf("expected bcrypt hash after migration, got: %s", newHash)
+		}
+		if !checkPassword(password, newHash) {
+			t.Error("expected migrated bcrypt hash to verify original password")
+		}
+	})
+
+	t.Run("Failure - Long Password", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		config.SetConfigDir(tmpDir)
+
+		username := "testuser"
+		// Bcrypt has a 72-byte limit for some implementations, but Go's bcrypt.GenerateFromPassword
+		// returns an error if password is too long (> 72 bytes).
+		longPassword := strings.Repeat("a", 73)
+
+		_ = config.UpdateConfig(func(cfg *config.Config) {
+			cfg.Users = map[string]string{username: "original-hash"}
+		})
+
+		migratePasswordToBcrypt(username, longPassword)
+
+		cfg, _ := config.LoadConfig()
+		if cfg.Users[username] != "original-hash" {
+			t.Error("expected hash to remain unchanged on failure")
+		}
+	})
 }

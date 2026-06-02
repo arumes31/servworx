@@ -87,53 +87,6 @@ func setupTestConfig(t *testing.T) (cleanup func()) {
 	}
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// hashPassword
-// ──────────────────────────────────────────────────────────────────────────────
-
-func TestHashPassword(t *testing.T) {
-	hash, err := hashPassword("mysecretpassword")
-	if err != nil {
-		t.Fatalf("hashPassword returned error: %v", err)
-	}
-	if !strings.HasPrefix(hash, "$2") {
-		t.Errorf("expected bcrypt hash starting with $2, got: %s", hash)
-	}
-	if !checkPassword("mysecretpassword", hash) {
-		t.Error("expected checkPassword to verify the freshly hashed password")
-	}
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// migratePasswordToBcrypt
-// ──────────────────────────────────────────────────────────────────────────────
-
-func TestMigratePasswordToBcrypt(t *testing.T) {
-	cleanup := setupTestConfig(t)
-	defer cleanup()
-
-	// Set a SHA256 hash for admin in config
-	sha256Hash := "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f" // password123
-	_ = config.UpdateConfig(func(c *config.Config) {
-		c.Users["admin"] = sha256Hash
-	})
-
-	// Migrate
-	migratePasswordToBcrypt("admin", "password123")
-
-	// Verify the stored hash is now bcrypt
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		t.Fatalf("failed to load config: %v", err)
-	}
-	newHash := cfg.Users["admin"]
-	if !strings.HasPrefix(newHash, "$2") {
-		t.Errorf("expected bcrypt hash after migration, got: %s", newHash)
-	}
-	if !checkPassword("password123", newHash) {
-		t.Error("migrated bcrypt hash does not verify password")
-	}
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // parseStatusCodes
