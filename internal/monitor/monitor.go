@@ -371,33 +371,66 @@ func handleServiceFailure(svc *config.ServiceConfig, restartAllowed bool, remain
 	}
 }
 
+func getLatestServiceConfig(name string) *config.ServiceConfig {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil
+	}
+	for i := range cfg.Services {
+		if cfg.Services[i].Name == name {
+			return &cfg.Services[i]
+		}
+	}
+	return nil
+}
+
+func calculateGracePeriod(gracePeriod int, lastRestart int64) (bool, int64) {
+	now := time.Now().Unix()
+	timeSinceLastRestart := now - lastRestart
+	restartAllowed := timeSinceLastRestart >= int64(gracePeriod)
+	remainingGrace := int64(gracePeriod) - timeSinceLastRestart
+	if remainingGrace < 0 {
+		remainingGrace = 0
+	}
+	return restartAllowed, remainingGrace
+}
+
+func runMonitoringCycle(currentSvc *config.ServiceConfig, lastRestart int64) (int64, bool) {
+	restartAllowed, remainingGrace := calculateGracePeriod(currentSvc.GracePeriod, lastRestart)
+
+	updateServiceStatus(currentSvc.Name, "Checking")
+
+	success, stopped := checkWithRetries(currentSvc)
+	if stopped {
+		return lastRestart, true
+	}
+
+	if !success {
+		lastRestart = handleServiceFailure(currentSvc, restartAllowed, remainingGrace, lastRestart)
+	}
+	return lastRestart, false
+}
+
 func monitorService(svc config.ServiceConfig) {
 	defer wg.Done()
 
 	lastRestart := readLastRestart(svc.Name)
 
-	ticker := time.NewTicker(time.Duration(svc.Interval) * time.Second)
+	interval := svc.Interval
+	if interval <= 0 {
+		interval = 60
+	}
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
 
 	for {
-		// Read latest config for this service in case it changed (like paused)
-		var currentSvc *config.ServiceConfig
-		cfg, err := config.LoadConfig()
-		if err == nil {
-			for _, s := range cfg.Services {
-				if s.Name == svc.Name {
-					currentSvc = &s
-					break
-				}
-			}
-		}
-
+		currentSvc := getLatestServiceConfig(svc.Name)
 		if currentSvc == nil {
-			// Service was deleted, exit goroutine
 			return
 		}
 
 		if currentSvc.Paused {
+			updateServiceStatus(currentSvc.Name, "Paused")
 			select {
 			case <-stopChan:
 				return
@@ -406,23 +439,10 @@ func monitorService(svc config.ServiceConfig) {
 			}
 		}
 
-		now := time.Now().Unix()
-		timeSinceLastRestart := now - lastRestart
-		restartAllowed := timeSinceLastRestart >= int64(currentSvc.GracePeriod)
-		remainingGrace := int64(currentSvc.GracePeriod) - timeSinceLastRestart
-		if remainingGrace < 0 {
-			remainingGrace = 0
-		}
-
-		updateServiceStatus(currentSvc.Name, "Checking")
-
-		success, stopped := checkWithRetries(currentSvc)
+		var stopped bool
+		lastRestart, stopped = runMonitoringCycle(currentSvc, lastRestart)
 		if stopped {
 			return
-		}
-
-		if !success {
-			lastRestart = handleServiceFailure(currentSvc, restartAllowed, remainingGrace, lastRestart)
 		}
 
 		select {
