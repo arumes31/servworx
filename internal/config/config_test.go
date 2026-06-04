@@ -43,6 +43,7 @@ func TestIsValidContainerName(t *testing.T) {
 }
 
 func TestConfigPersistence(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -74,6 +75,7 @@ func TestConfigPersistence(t *testing.T) {
 }
 
 func TestStatusPersistence(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -100,6 +102,7 @@ func TestStatusPersistence(t *testing.T) {
 }
 
 func TestAtomicUpdates(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -146,6 +149,7 @@ func TestAtomicUpdates(t *testing.T) {
 }
 
 func TestLoadNonExistent(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -163,6 +167,7 @@ func TestLoadNonExistent(t *testing.T) {
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -186,6 +191,7 @@ func TestLoadInvalidJSON(t *testing.T) {
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -217,6 +223,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 }
 
 func TestUpdateStatusNewFile(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -245,6 +252,7 @@ func TestUpdateStatusNewFile(t *testing.T) {
 }
 
 func TestUpdateConfigNewFile(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
@@ -273,6 +281,7 @@ func TestUpdateConfigNewFile(t *testing.T) {
 }
 
 func TestUpdateInvalidJSON(t *testing.T) {
+	clearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
