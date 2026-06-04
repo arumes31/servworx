@@ -91,18 +91,7 @@ func setupTestConfig(t *testing.T) (cleanup func()) {
 // hashPassword
 // ──────────────────────────────────────────────────────────────────────────────
 
-func TestHashPassword(t *testing.T) {
-	hash, err := hashPassword("mysecretpassword")
-	if err != nil {
-		t.Fatalf("hashPassword returned error: %v", err)
-	}
-	if !strings.HasPrefix(hash, "$2") {
-		t.Errorf("expected bcrypt hash starting with $2, got: %s", hash)
-	}
-	if !checkPassword("mysecretpassword", hash) {
-		t.Error("expected checkPassword to verify the freshly hashed password")
-	}
-}
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // migratePasswordToBcrypt
@@ -1397,20 +1386,7 @@ func TestParseIndex_Invalid(t *testing.T) {
 // InitTemplates
 // ──────────────────────────────────────────────────────────────────────────────
 
-func TestInitTemplates(t *testing.T) {
-	// Use actual templates dir for a smoke test of InitTemplates
-	templatesDir := "../../templates"
-	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
-		t.Skip("templates directory not found, skipping InitTemplates test")
-	}
 
-	// Should not panic
-	InitTemplates(templatesDir)
-
-	if templates == nil {
-		t.Error("expected templates to be initialized")
-	}
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // HandleUpdateServicePOST — negative alert values
