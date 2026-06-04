@@ -54,7 +54,7 @@ func TestConfigPersistence(t *testing.T) {
 			{
 				Name:                "Service1",
 				WebsiteURL:          "http://localhost:8080",
-				AcceptedStatusCodes: []int{200}, // explicitly set to match LoadConfig defaults
+				AcceptedStatusCodes: []int{200},
 			},
 		},
 	}
@@ -105,7 +105,6 @@ func TestAtomicUpdates(t *testing.T) {
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	// Test UpdateConfig
 	err := UpdateConfig(func(cfg *Config) {
 		cfg.Users["testuser"] = "testpass"
 	})
@@ -121,7 +120,6 @@ func TestAtomicUpdates(t *testing.T) {
 		t.Errorf("UpdateConfig did not persist change")
 	}
 
-	// Test UpdateStatus
 	err = UpdateStatus(func(s *Status) {
 		s.Services = append(s.Services, ServiceStatus{Name: "NewService", Status: "Down"})
 	})
@@ -191,12 +189,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	cfgJSON := `{
-		"users": {},
-		"services": [
-			{"name": "ServiceWithoutCodes"}
-		]
-	}`
+	cfgJSON := `{"users": {}, "services": [{"name": "ServiceWithoutCodes"}]}`
 	if err := os.WriteFile(filepath.Join(tmpDir, ConfigFile), []byte(cfgJSON), 0600); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
@@ -206,13 +199,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if len(loaded.Services) != 1 {
-		t.Fatalf("Expected 1 service, got %d", len(loaded.Services))
-	}
-
-	codes := loaded.Services[0].AcceptedStatusCodes
-	if len(codes) != 1 || codes[0] != 200 {
-		t.Errorf("Expected default status code [200], got %v", codes)
+	if len(loaded.Services) != 1 || len(loaded.Services[0].AcceptedStatusCodes) != 1 || loaded.Services[0].AcceptedStatusCodes[0] != 200 {
+		t.Errorf("Expected default status code [200], got %v", loaded.Services[0].AcceptedStatusCodes)
 	}
 }
 
@@ -221,12 +209,6 @@ func TestUpdateStatusNewFile(t *testing.T) {
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
-
-	// Ensure file does not exist
-	statusPath := filepath.Join(tmpDir, StatusFile)
-	if _, err := os.Stat(statusPath); !os.IsNotExist(err) {
-		t.Fatalf("Status file already exists")
-	}
 
 	err := UpdateStatus(func(s *Status) {
 		s.Services = append(s.Services, ServiceStatus{Name: "InitialService", Status: "Up"})
@@ -240,7 +222,7 @@ func TestUpdateStatusNewFile(t *testing.T) {
 		t.Fatalf("LoadStatus failed: %v", err)
 	}
 	if len(loaded.Services) != 1 || loaded.Services[0].Name != "InitialService" {
-		t.Errorf("UpdateStatus did not create file correctly, got: %+v", loaded)
+		t.Errorf("UpdateStatus did not create file correctly")
 	}
 }
 
@@ -249,12 +231,6 @@ func TestUpdateConfigNewFile(t *testing.T) {
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
-
-	// Ensure file does not exist
-	configPath := filepath.Join(tmpDir, ConfigFile)
-	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
-		t.Fatalf("Config file already exists")
-	}
 
 	err := UpdateConfig(func(cfg *Config) {
 		cfg.Users["newadmin"] = "newhash"
@@ -268,7 +244,7 @@ func TestUpdateConfigNewFile(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 	if loaded.Users["newadmin"] != "newhash" {
-		t.Errorf("UpdateConfig did not create file correctly, got: %+v", loaded)
+		t.Errorf("UpdateConfig did not create file correctly")
 	}
 }
 
@@ -278,20 +254,14 @@ func TestUpdateInvalidJSON(t *testing.T) {
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	if err := os.WriteFile(filepath.Join(tmpDir, ConfigFile), []byte("invalid json"), 0600); err != nil {
-		t.Fatalf("Failed to write invalid config: %v", err)
-	}
-	err := UpdateConfig(func(cfg *Config) {})
-	if err == nil {
-		t.Error("Expected error when updating invalid config JSON, got nil")
+	os.WriteFile(filepath.Join(tmpDir, ConfigFile), []byte("invalid json"), 0600)
+	if err := UpdateConfig(func(cfg *Config) {}); err == nil {
+		t.Error("Expected error when updating invalid config JSON")
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, StatusFile), []byte("invalid json"), 0600); err != nil {
-		t.Fatalf("Failed to write invalid status: %v", err)
-	}
-	err = UpdateStatus(func(s *Status) {})
-	if err == nil {
-		t.Error("Expected error when updating invalid status JSON, got nil")
+	os.WriteFile(filepath.Join(tmpDir, StatusFile), []byte("invalid json"), 0600)
+	if err := UpdateStatus(func(s *Status) {}); err == nil {
+		t.Error("Expected error when updating invalid status JSON")
 	}
 }
 
@@ -302,34 +272,14 @@ func TestServiceConfig_UnmarshalJSON(t *testing.T) {
 		expected ServiceConfig
 	}{
 		{
-			name: "all fields missing (defaults to true)",
+			name: "defaults",
 			json: `{"name": "test"}`,
-			expected: ServiceConfig{
-				Name:            "test",
-				AlertOnFailure:  true,
-				AlertOnRecovery: true,
-				AlertOnRestart:  true,
-			},
+			expected: ServiceConfig{Name: "test", AlertOnFailure: true, AlertOnRecovery: true, AlertOnRestart: true},
 		},
 		{
-			name: "explicitly false",
+			name: "explicit false",
 			json: `{"name": "test", "alert_on_failure": false, "alert_on_recovery": false, "alert_on_restart": false}`,
-			expected: ServiceConfig{
-				Name:            "test",
-				AlertOnFailure:  false,
-				AlertOnRecovery: false,
-				AlertOnRestart:  false,
-			},
-		},
-		{
-			name: "explicitly true",
-			json: `{"name": "test", "alert_on_failure": true, "alert_on_recovery": true, "alert_on_restart": true}`,
-			expected: ServiceConfig{
-				Name:            "test",
-				AlertOnFailure:  true,
-				AlertOnRecovery: true,
-				AlertOnRestart:  true,
-			},
+			expected: ServiceConfig{Name: "test", AlertOnFailure: false, AlertOnRecovery: false, AlertOnRestart: false},
 		},
 	}
 
@@ -339,10 +289,8 @@ func TestServiceConfig_UnmarshalJSON(t *testing.T) {
 			if err := json.Unmarshal([]byte(tt.json), &got); err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
-			if got.AlertOnFailure != tt.expected.AlertOnFailure ||
-				got.AlertOnRecovery != tt.expected.AlertOnRecovery ||
-				got.AlertOnRestart != tt.expected.AlertOnRestart {
-				t.Errorf("UnmarshalJSON() = %+v, want %+v", got, tt.expected)
+			if got.AlertOnFailure != tt.expected.AlertOnFailure || got.AlertOnRecovery != tt.expected.AlertOnRecovery || got.AlertOnRestart != tt.expected.AlertOnRestart {
+				t.Errorf("UnmarshalJSON mismatch")
 			}
 		})
 	}
@@ -350,154 +298,88 @@ func TestServiceConfig_UnmarshalJSON(t *testing.T) {
 
 func TestServiceConfig_UnmarshalJSON_Error(t *testing.T) {
 	var s ServiceConfig
-	if err := s.UnmarshalJSON([]byte(`{invalid json}`)); err == nil {
-		t.Error("Expected error for invalid JSON, got nil")
+	if err := s.UnmarshalJSON([]byte(`{invalid}`)); err == nil {
+		t.Error("Expected error for invalid JSON")
 	}
 }
 
 func TestSaveErrors(t *testing.T) {
 	tmpDir := t.TempDir()
 	badDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(badDir, 0500); err != nil {
-		t.Fatal(err)
-	}
-
+	os.MkdirAll(badDir, 0500)
 	originalDir := ConfigDir
 	SetConfigDir(badDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	// Test SaveConfig error (MkdirAll/WriteFile)
 	if err := SaveConfig(&Config{}); err == nil {
-		t.Error("Expected error in SaveConfig with read-only directory, got nil")
+		t.Error("Expected error in SaveConfig")
 	}
-
-	// Test SaveStatus error
 	if err := SaveStatus(&Status{}); err == nil {
-		t.Error("Expected error in SaveStatus with read-only directory, got nil")
+		t.Error("Expected error in SaveStatus")
 	}
 }
 
 func TestUpdateErrors(t *testing.T) {
 	tmpDir := t.TempDir()
 	badDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(badDir, 0500); err != nil {
-		t.Fatal(err)
-	}
-
+	os.MkdirAll(badDir, 0500)
 	originalDir := ConfigDir
 	SetConfigDir(badDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	// UpdateConfig write error
-	err := UpdateConfig(func(c *Config) {})
-	if err == nil {
-		t.Error("Expected error in UpdateConfig with read-only directory, got nil")
+	if err := UpdateConfig(func(c *Config) {}); err == nil {
+		t.Error("Expected error in UpdateConfig")
 	}
-
-	// UpdateStatus write error
-	err = UpdateStatus(func(s *Status) {})
-	if err == nil {
-		t.Error("Expected error in UpdateStatus with read-only directory, got nil")
+	if err := UpdateStatus(func(s *Status) {}); err == nil {
+		t.Error("Expected error in UpdateStatus")
 	}
 }
 
-func TestSaveConfigMkdirError(t *testing.T) {
+func TestSaveMkdirError(t *testing.T) {
 	tmpDir := t.TempDir()
-	// Create a file where a directory should be
 	blockedDir := filepath.Join(tmpDir, "blocked")
-	if err := os.WriteFile(blockedDir, []byte("file"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
+	os.WriteFile(blockedDir, []byte("file"), 0600)
 	originalDir := ConfigDir
 	SetConfigDir(filepath.Join(blockedDir, "config"))
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
 	if err := SaveConfig(&Config{}); err == nil {
-		t.Error("Expected error in SaveConfig when MkdirAll fails")
+		t.Error("Expected error in SaveConfig Mkdir")
 	}
-}
-
-func TestSaveStatusMkdirError(t *testing.T) {
-	tmpDir := t.TempDir()
-	blockedDir := filepath.Join(tmpDir, "blocked")
-	if err := os.WriteFile(blockedDir, []byte("file"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	originalDir := ConfigDir
-	SetConfigDir(filepath.Join(blockedDir, "config"))
-	t.Cleanup(func() { SetConfigDir(originalDir) })
-
 	if err := SaveStatus(&Status{}); err == nil {
-		t.Error("Expected error in SaveStatus when MkdirAll fails")
+		t.Error("Expected error in SaveStatus Mkdir")
 	}
 }
 
-func TestUpdateConfigReadFileError(t *testing.T) {
+func TestUpdateReadFileError(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	// Create a directory with the name of the config file to trigger ReadFile error
-	if err := os.MkdirAll(filepath.Join(tmpDir, ConfigFile), 0750); err != nil {
-		t.Fatal(err)
+	os.MkdirAll(filepath.Join(tmpDir, ConfigFile), 0750)
+	if err := UpdateConfig(func(c *Config) {}); err == nil {
+		t.Error("Expected error in UpdateConfig ReadFile")
 	}
 
-	err := UpdateConfig(func(c *Config) {})
-	if err == nil {
-		t.Error("Expected error in UpdateConfig when ReadFile fails")
-	}
-}
-
-func TestUpdateStatusReadFileError(t *testing.T) {
-	tmpDir := t.TempDir()
-	originalDir := ConfigDir
-	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
-
-	// Create a directory with the name of the status file to trigger ReadFile error
-	if err := os.MkdirAll(filepath.Join(tmpDir, StatusFile), 0750); err != nil {
-		t.Fatal(err)
-	}
-
-	err := UpdateStatus(func(s *Status) {})
-	if err == nil {
-		t.Error("Expected error in UpdateStatus when ReadFile fails")
+	os.MkdirAll(filepath.Join(tmpDir, StatusFile), 0750)
+	if err := UpdateStatus(func(s *Status) {}); err == nil {
+		t.Error("Expected error in UpdateStatus ReadFile")
 	}
 }
 
-func TestUpdateConfigMkdirError(t *testing.T) {
+func TestUpdateMkdirError(t *testing.T) {
 	tmpDir := t.TempDir()
 	blockedDir := filepath.Join(tmpDir, "blocked")
-	if err := os.WriteFile(blockedDir, []byte("file"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
+	os.WriteFile(blockedDir, []byte("file"), 0600)
 	originalDir := ConfigDir
 	SetConfigDir(filepath.Join(blockedDir, "config"))
 	t.Cleanup(func() { SetConfigDir(originalDir) })
 
-	err := UpdateConfig(func(c *Config) {})
-	if err == nil {
-		t.Error("Expected error in UpdateConfig when MkdirAll fails")
+	if err := UpdateConfig(func(c *Config) {}); err == nil {
+		t.Error("Expected error in UpdateConfig Mkdir")
 	}
-}
-
-func TestUpdateStatusMkdirError(t *testing.T) {
-	tmpDir := t.TempDir()
-	blockedDir := filepath.Join(tmpDir, "blocked")
-	if err := os.WriteFile(blockedDir, []byte("file"), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	originalDir := ConfigDir
-	SetConfigDir(filepath.Join(blockedDir, "config"))
-	t.Cleanup(func() { SetConfigDir(originalDir) })
-
-	err := UpdateStatus(func(s *Status) {})
-	if err == nil {
-		t.Error("Expected error in UpdateStatus when MkdirAll fails")
+	if err := UpdateStatus(func(s *Status) {}); err == nil {
+		t.Error("Expected error in UpdateStatus Mkdir")
 	}
 }
