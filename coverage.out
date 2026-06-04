@@ -1,0 +1,14 @@
+mode: set
+github.com/arumes31/servworx/internal/auth/session.go:21.33,25.2 3 1
+github.com/arumes31/servworx/internal/auth/session.go:27.44,36.2 5 1
+github.com/arumes31/servworx/internal/auth/session.go:38.49,40.16 2 1
+github.com/arumes31/servworx/internal/auth/session.go:40.16,42.3 1 1
+github.com/arumes31/servworx/internal/auth/session.go:43.2,49.9 5 1
+github.com/arumes31/servworx/internal/auth/session.go:49.9,51.3 1 1
+github.com/arumes31/servworx/internal/auth/session.go:53.2,53.38 1 1
+github.com/arumes31/servworx/internal/auth/session.go:53.38,58.3 4 1
+github.com/arumes31/servworx/internal/auth/session.go:60.2,60.28 1 1
+github.com/arumes31/servworx/internal/auth/session.go:63.61,65.16 2 1
+github.com/arumes31/servworx/internal/auth/session.go:65.16,67.3 1 1
+github.com/arumes31/servworx/internal/auth/session.go:68.2,83.4 5 1
+github.com/arumes31/servworx/internal/auth/session.go:86.64,96.2 1 1
