@@ -74,3 +74,53 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleViewLogsGET_Security(t *testing.T) {
+	// Setup temporary config
+	tmpDir := t.TempDir()
+	config.SetConfigDir(tmpDir)
+
+	// Create config.json
+	cfgPath := filepath.Join(tmpDir, "config.json")
+	cfgData := []byte(`{
+		"services": [
+			{
+				"name": "MixedService",
+				"container_names": "bad name; touch /tmp/pwned, valid-name"
+			}
+		]
+	}`)
+	err := os.WriteFile(cfgPath, cfgData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	// Create dummy status.json
+	statusPath := filepath.Join(tmpDir, "status.json")
+	statusData := []byte(`{"services": []}`)
+	err = os.WriteFile(statusPath, statusData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write status file: %v", err)
+	}
+
+	// Init templates with a dummy template
+	// Create dummy template file in a temp directory for the test
+	tplDir := t.TempDir()
+	err = os.WriteFile(filepath.Join(tplDir, "config.html"), []byte("<html><body>{{.Logs}}</body></html>"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write template file: %v", err)
+	}
+	InitTemplates(tplDir)
+
+	req := httptest.NewRequest("GET", "/view_logs/0", nil)
+	req.SetPathValue("index", "0")
+
+	rr := httptest.NewRecorder()
+
+	HandleViewLogsGET(rr, req)
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Logs for bad name; touch /tmp/pwned: [Invalid container name]") {
+		t.Errorf("expected malicious container to be blocked and logged as invalid, but got: %q", body)
+	}
+}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -245,7 +246,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-	
+
 	providers := getNotificationProviders()
 	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
 	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
@@ -383,12 +384,14 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 				continue
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			// #nosec G204
-			cmd := exec.Command("docker", "restart", c)
+			cmd := exec.CommandContext(ctx, "docker", "restart", c)
 			if err := cmd.Run(); err != nil {
 				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
 				restartSucceeded = false
 			}
+			cancel()
 		}
 
 		if restartSucceeded {
@@ -474,7 +477,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			// #nosec G204
-			cmd := exec.Command("docker", "logs", "--tail", "10", c)
+			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", c)
 			out, _ := cmd.CombinedOutput()
 			outStr := string(out)
 			if outStr == "" {
