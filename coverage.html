@@ -1,0 +1,1063 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>monitor: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+
+				<option value="file0">github.com/arumes31/servworx/internal/monitor/monitor.go (91.2%)</option>
+
+				<option value="file1">github.com/arumes31/servworx/internal/monitor/notification.go (89.5%)</option>
+
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+
+			</div>
+		</div>
+		<div id="content">
+
+		<pre class="file" id="file0" style="display: none">package monitor
+
+import (
+        "context"
+        "crypto/tls"
+        "encoding/base64"
+        "fmt"
+        "log"
+        "net/http"
+        "os"
+        "os/exec"
+        "path/filepath"
+        "strconv"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/arumes31/servworx/internal/config"
+)
+
+var (
+        stopChan = make(chan struct{})
+        wg       sync.WaitGroup
+
+        defaultHttpClient = &amp;http.Client{
+                Timeout: 5 * time.Second,
+        }
+        insecureHttpClient = &amp;http.Client{
+                Timeout: 5 * time.Second,
+                Transport: &amp;http.Transport{
+                        // #nosec G402
+                        TLSClientConfig: &amp;tls.Config{InsecureSkipVerify: true},
+                },
+        }
+
+        // In-memory health check history (not persisted to disk)
+        healthHistory = make(map[string][]string)
+        historyMutex  sync.RWMutex
+
+        // color codes
+        colorGreen  = "\033[92m"
+        colorBlue   = "\033[94m"
+        colorYellow = "\033[93m"
+        colorRed    = "\033[91m"
+        colorReset  = "\033[0m"
+)
+
+// PushHistory adds a status entry to the in-memory history for a service.
+func PushHistory(serviceName, status string) <span class="cov8" title="1">{
+        historyMutex.Lock()
+        defer historyMutex.Unlock()
+        healthHistory[serviceName] = append(healthHistory[serviceName], status)
+        if len(healthHistory[serviceName]) &gt; 30 </span><span class="cov8" title="1">{
+                healthHistory[serviceName] = healthHistory[serviceName][1:]
+        }</span>
+}
+
+// GetHistory returns a copy of the in-memory history for a service.
+func GetHistory(serviceName string) []string <span class="cov8" title="1">{
+        historyMutex.RLock()
+        defer historyMutex.RUnlock()
+        h := healthHistory[serviceName]
+        if h == nil </span><span class="cov8" title="1">{
+                return []string{}
+        }</span>
+        <span class="cov8" title="1">result := make([]string, len(h))
+        copy(result, h)
+        return result</span>
+}
+
+func LogAction(username, action, logType string) <span class="cov8" title="1">{
+        timestamp := time.Now().Format("2006-01-02 15:04:05")
+        color := colorReset
+        switch logType </span>{
+        case "user":<span class="cov8" title="1">
+                color = colorGreen</span>
+        case "system":<span class="cov8" title="1">
+                color = colorBlue</span>
+        case "status":<span class="cov8" title="1">
+                if strings.Contains(action, "Down") </span><span class="cov8" title="1">{
+                        color = colorRed
+                }</span> else<span class="cov8" title="1"> {
+                        color = colorYellow
+                }</span>
+        case "error":<span class="cov8" title="1">
+                color = colorRed</span>
+        }
+        <span class="cov8" title="1">fmt.Printf("%s[%s] %s: %s%s\n", color, timestamp, username, action, colorReset)</span>
+}
+
+func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, string) <span class="cov8" title="1">{
+        httpClient := defaultHttpClient
+        if insecureSkip </span><span class="cov8" title="1">{
+                httpClient = insecureHttpClient
+        }</span>
+        <span class="cov8" title="1">resp, err := httpClient.Head(url)
+        if err != nil </span><span class="cov8" title="1">{
+                return false, fmt.Sprintf("Website is unreachable: %v", err)
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        // Check if the HEAD response code is already accepted before falling back to GET
+        <span class="cov8" title="1">for _, code := range acceptedCodes </span><span class="cov8" title="1">{
+                if resp.StatusCode == code </span><span class="cov8" title="1">{
+                        return true, fmt.Sprintf("Website returned status %d (accepted)", resp.StatusCode)
+                }</span>
+        }
+
+        // Only fall back to GET if HEAD returned 405/501 and the code wasn't explicitly accepted
+        <span class="cov8" title="1">if resp.StatusCode == 405 || resp.StatusCode == 501 </span><span class="cov8" title="1">{
+                resp2, err2 := httpClient.Get(url)
+                if err2 != nil </span><span class="cov0" title="0">{
+                        return false, fmt.Sprintf("Website is unreachable: %v", err2)
+                }</span>
+                <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp2.Body.Close() }</span>()
+                <span class="cov8" title="1">resp = resp2</span>
+        }
+
+        <span class="cov8" title="1">for _, code := range acceptedCodes </span><span class="cov8" title="1">{
+                if resp.StatusCode == code </span><span class="cov8" title="1">{
+                        return true, fmt.Sprintf("Website returned status %d (accepted)", resp.StatusCode)
+                }</span>
+        }
+        <span class="cov8" title="1">return false, fmt.Sprintf("Website returned status %d (not accepted)", resp.StatusCode)</span>
+}
+
+func restartContainers(containerNames, serviceName string) int64 <span class="cov8" title="1">{
+        LogAction("System", fmt.Sprintf("Restarting Docker containers for %s", serviceName), "error")
+
+        // Trigger self-healing restart notification if enabled
+        if cfg, err := config.LoadConfig(); err == nil </span><span class="cov8" title="1">{
+                for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                        if svc.Name == serviceName </span><span class="cov8" title="1">{
+                                if svc.AlertOnRestart </span><span class="cov8" title="1">{
+                                        SendNotification(svc, "Down", fmt.Sprintf("Auto-restart initiated for containers: %s", containerNames))
+                                }</span>
+                                <span class="cov8" title="1">break</span>
+                        }
+                }
+        }
+        <span class="cov8" title="1">containers := strings.Split(containerNames, ",")
+        for _, c := range containers </span><span class="cov8" title="1">{
+                c = strings.TrimSpace(c)
+                if c == "" </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if !config.IsValidContainerName(c) </span><span class="cov8" title="1">{
+                        fmt.Printf("Invalid container name blocked from restart: %s\n", c)
+                        LogAction("System", fmt.Sprintf("Invalid container name blocked from restart: %s", c), "error")
+                        continue</span>
+                }
+                <span class="cov0" title="0">fmt.Printf("Executing 'docker restart %s'\n", c)
+
+                ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+                // #nosec G204
+                cmd := exec.CommandContext(ctx, "docker", "restart", c)
+                if err := cmd.Run(); err != nil </span><span class="cov0" title="0">{
+                        fmt.Printf("Error restarting %s: %v\n", c, err)
+                }</span> else<span class="cov0" title="0"> {
+                        fmt.Printf("Completed 'docker restart %s'\n", c)
+                }</span>
+                <span class="cov0" title="0">cancel()</span>
+        }
+
+        <span class="cov8" title="1">lastRestart := time.Now().Unix()
+        _ = config.UpdateStatus(func(s *config.Status) </span><span class="cov8" title="1">{
+                for i := range s.Services </span><span class="cov8" title="1">{
+                        if s.Services[i].Name == serviceName </span><span class="cov8" title="1">{
+                                nowStr := time.Now().Format("2006-01-02 15:04:05")
+                                s.Services[i].LastFailure = &amp;nowStr
+                                LogAction("System", fmt.Sprintf("Updated last_failure for %s to %s", serviceName, nowStr), "system")
+                        }</span>
+                }
+        })
+        <span class="cov8" title="1">return lastRestart</span>
+}
+
+func getRestartFilename(name string) string <span class="cov8" title="1">{
+        safeName := base64.URLEncoding.EncodeToString([]byte(name))
+        return fmt.Sprintf("last_restart_%s.txt", safeName)
+}</span>
+
+func readLastRestart(name string) int64 <span class="cov8" title="1">{
+        path := filepath.Join(config.ConfigDir, getRestartFilename(name))
+        // #nosec G304
+        data, err := os.ReadFile(path)
+        if err != nil </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">val, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+        if err != nil </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">return val</span>
+}
+
+func writeLastRestart(name string, val int64) <span class="cov8" title="1">{
+        path := filepath.Join(config.ConfigDir, getRestartFilename(name))
+        _ = os.WriteFile(path, []byte(fmt.Sprintf("%d", val)), 0600)
+}</span>
+
+func updateServiceStatus(serviceName, status string) <span class="cov8" title="1">{
+        _ = config.UpdateStatus(func(s *config.Status) </span><span class="cov8" title="1">{
+                for i := range s.Services </span><span class="cov8" title="1">{
+                        if s.Services[i].Name == serviceName </span><span class="cov8" title="1">{
+                                if status == "Checking" </span><span class="cov8" title="1">{
+                                        s.Services[i].Status = "Checking"
+                                        LogAction("System", fmt.Sprintf("Service %s status: Checking", serviceName), "status")
+                                        return
+                                }</span>
+
+                                <span class="cov8" title="1">oldStatusStr := s.Services[i].LastStableStatus
+                                if oldStatusStr == "" </span><span class="cov0" title="0">{
+                                        oldStatusStr = s.Services[i].Status
+                                }</span>
+
+                                <span class="cov8" title="1">s.Services[i].Status = status
+
+                                if status != oldStatusStr </span><span class="cov8" title="1">{
+                                        nowStr := time.Now().Format("2006-01-02 15:04:05")
+                                        var transitionMsg string
+                                        var shouldSend bool
+                                        if status == "Down" &amp;&amp; (oldStatusStr == "Up" || oldStatusStr == "Unknown") </span><span class="cov8" title="1">{
+                                                s.Services[i].DownSince = &amp;nowStr
+                                                s.Services[i].UpSince = nil
+                                                s.Services[i].LastFailure = &amp;nowStr
+                                                LogAction("System", fmt.Sprintf("Updated down_since for %s to %s", serviceName, nowStr), "system")
+                                                transitionMsg = fmt.Sprintf("Service %s went Down! Integrity checks failed.", serviceName)
+
+                                                // Retrieve config to check failure alerting rules
+                                                if cfg, err := config.LoadConfig(); err == nil </span><span class="cov8" title="1">{
+                                                        for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                                                                if svc.Name == serviceName </span><span class="cov8" title="1">{
+                                                                        shouldSend = svc.AlertOnFailure
+                                                                        break</span>
+                                                                }
+                                                        }
+                                                }
+
+                                                // Initialize/Reset tracking for down alerts
+                                                <span class="cov8" title="1">nowUnix := time.Now().Unix()
+                                                s.Services[i].LastAlertTime = &amp;nowUnix
+                                                s.Services[i].AlertCount = 1</span>
+
+                                        } else<span class="cov8" title="1"> if status == "Up" &amp;&amp; (oldStatusStr == "Down" || oldStatusStr == "Unknown") </span><span class="cov8" title="1">{
+                                                s.Services[i].UpSince = &amp;nowStr
+                                                s.Services[i].DownSince = nil
+                                                LogAction("System", fmt.Sprintf("Updated up_since for %s to %s", serviceName, nowStr), "system")
+                                                transitionMsg = fmt.Sprintf("Service %s recovered and is now Up.", serviceName)
+
+                                                // Retrieve config to check recovery alerting rules
+                                                if cfg, err := config.LoadConfig(); err == nil </span><span class="cov8" title="1">{
+                                                        for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                                                                if svc.Name == serviceName </span><span class="cov8" title="1">{
+                                                                        shouldSend = svc.AlertOnRecovery
+                                                                        break</span>
+                                                                }
+                                                        }
+                                                }
+
+                                                // Reset down alert tracking
+                                                <span class="cov8" title="1">s.Services[i].LastAlertTime = nil
+                                                s.Services[i].AlertCount = 0</span>
+                                        }
+
+                                        <span class="cov8" title="1">if transitionMsg != "" &amp;&amp; shouldSend </span><span class="cov8" title="1">{
+                                                if cfg, err := config.LoadConfig(); err == nil </span><span class="cov8" title="1">{
+                                                        for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                                                                if svc.Name == serviceName </span><span class="cov8" title="1">{
+                                                                        SendNotification(svc, status, transitionMsg)
+                                                                        break</span>
+                                                                }
+                                                        }
+                                                }
+                                        }
+                                } else<span class="cov8" title="1"> if status == "Down" </span><span class="cov8" title="1">{
+                                        // Service remains down, check for repeat alerts!
+                                        if cfg, err := config.LoadConfig(); err == nil </span><span class="cov8" title="1">{
+                                                for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                                                        if svc.Name == serviceName </span><span class="cov8" title="1">{
+                                                                if svc.AlertRepeatInterval &gt; 0 </span><span class="cov8" title="1">{
+                                                                        nowUnix := time.Now().Unix()
+                                                                        lastAlert := int64(0)
+                                                                        if s.Services[i].LastAlertTime != nil </span><span class="cov8" title="1">{
+                                                                                lastAlert = *s.Services[i].LastAlertTime
+                                                                        }</span>
+
+                                                                        // If LastAlertTime is not set yet, or repeat interval elapsed
+                                                                        <span class="cov8" title="1">if lastAlert == 0 || (nowUnix-lastAlert) &gt;= int64(svc.AlertRepeatInterval) </span><span class="cov8" title="1">{
+                                                                                // Check max alerts cap
+                                                                                if svc.AlertMaxRepeats == 0 || s.Services[i].AlertCount &lt; svc.AlertMaxRepeats+1 </span><span class="cov8" title="1">{
+                                                                                        if svc.AlertOnFailure </span><span class="cov8" title="1">{
+                                                                                                canDispatch := true
+                                                                                                if svc.AlertSnoozeUntil &gt; time.Now().Unix() || isQuietHours(time.Now(), svc.QuietHoursStart, svc.QuietHoursEnd) </span><span class="cov0" title="0">{
+                                                                                                        canDispatch = false
+                                                                                                }</span>
+                                                                                                <span class="cov8" title="1">if canDispatch </span><span class="cov8" title="1">{
+                                                                                                        s.Services[i].LastAlertTime = &amp;nowUnix
+                                                                                                        s.Services[i].AlertCount++
+
+                                                                                                        downStr := "unknown time"
+                                                                                                        if s.Services[i].DownSince != nil </span><span class="cov8" title="1">{
+                                                                                                                downStr = *s.Services[i].DownSince
+                                                                                                        }</span>
+
+                                                                                                        <span class="cov8" title="1">repeatMsg := fmt.Sprintf("[Repeat Alert #%d] Service %s has been Down since %s.",
+                                                                                                                s.Services[i].AlertCount-1, serviceName, downStr)
+
+                                                                                                        SendNotification(svc, "Down", repeatMsg)</span>
+                                                                                                }
+                                                                                        }
+                                                                                }
+                                                                        }
+                                                                }
+                                                                <span class="cov8" title="1">break</span>
+                                                        }
+                                                }
+                                        }
+                                }
+                                <span class="cov8" title="1">s.Services[i].LastStableStatus = status
+                                LogAction("System", fmt.Sprintf("Service %s status: %s", serviceName, status), "status")
+                                break</span>
+                        }
+                }
+        })
+
+        <span class="cov8" title="1">if status != "Checking" </span><span class="cov8" title="1">{
+                PushHistory(serviceName, status)
+        }</span>
+}
+
+func checkWithRetries(svc *config.ServiceConfig) (bool, bool) <span class="cov8" title="1">{
+        success := false
+        var message string
+        for i := 1; i &lt;= svc.Retries; i++ </span><span class="cov8" title="1">{
+                success, message = checkWebsite(svc.WebsiteURL, svc.AcceptedStatusCodes, svc.InsecureSkipVerify)
+
+                status := "Down"
+                if success </span><span class="cov8" title="1">{
+                        status = "Up"
+                }</span>
+                <span class="cov8" title="1">updateServiceStatus(svc.Name, status)
+
+                fmt.Printf("%s: %s\n", svc.Name, message)
+                if success </span><span class="cov8" title="1">{
+                        return true, false
+                }</span> else<span class="cov8" title="1"> if i &lt; svc.Retries </span><span class="cov8" title="1">{
+                        fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", svc.Name, i, svc.Retries, svc.Interval)
+
+                        select </span>{
+                        case &lt;-time.After(time.Duration(svc.Interval) * time.Second):<span class="cov8" title="1"></span>
+                                // waited
+                        case &lt;-stopChan:<span class="cov0" title="0">
+                                return false, true</span>
+                        }
+                }
+        }
+        <span class="cov8" title="1">fmt.Printf("%s: Max retries (%d) reached.\n", svc.Name, svc.Retries)
+        return false, false</span>
+}
+
+func handleServiceFailure(svc *config.ServiceConfig, restartAllowed bool, remainingGrace int64, lastRestart int64) int64 <span class="cov8" title="1">{
+        if restartAllowed </span><span class="cov8" title="1">{
+                newRestart := restartContainers(svc.ContainerNames, svc.Name)
+                writeLastRestart(svc.Name, newRestart)
+                return newRestart
+        }</span> else<span class="cov8" title="1"> {
+                fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", svc.Name, remainingGrace)
+                LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", svc.Name, remainingGrace), "error")
+                return lastRestart
+        }</span>
+}
+
+func monitorService(svc config.ServiceConfig) <span class="cov8" title="1">{
+        defer wg.Done()
+
+        lastRestart := readLastRestart(svc.Name)
+
+        ticker := time.NewTicker(time.Duration(svc.Interval) * time.Second)
+        defer ticker.Stop()
+
+        for </span><span class="cov8" title="1">{
+                // Read latest config for this service in case it changed (like paused)
+                var currentSvc *config.ServiceConfig
+                cfg, err := config.LoadConfig()
+                if err == nil </span><span class="cov8" title="1">{
+                        for _, s := range cfg.Services </span><span class="cov8" title="1">{
+                                if s.Name == svc.Name </span><span class="cov8" title="1">{
+                                        currentSvc = &amp;s
+                                        break</span>
+                                }
+                        }
+                }
+
+                <span class="cov8" title="1">if currentSvc == nil </span><span class="cov0" title="0">{
+                        // Service was deleted, exit goroutine
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if currentSvc.Paused </span><span class="cov0" title="0">{
+                        select </span>{
+                        case &lt;-stopChan:<span class="cov0" title="0">
+                                return</span>
+                        case &lt;-ticker.C:<span class="cov0" title="0">
+                                continue</span>
+                        }
+                }
+
+                <span class="cov8" title="1">now := time.Now().Unix()
+                timeSinceLastRestart := now - lastRestart
+                restartAllowed := timeSinceLastRestart &gt;= int64(currentSvc.GracePeriod)
+                remainingGrace := int64(currentSvc.GracePeriod) - timeSinceLastRestart
+                if remainingGrace &lt; 0 </span><span class="cov8" title="1">{
+                        remainingGrace = 0
+                }</span>
+
+                <span class="cov8" title="1">updateServiceStatus(currentSvc.Name, "Checking")
+
+                success, stopped := checkWithRetries(currentSvc)
+                if stopped </span><span class="cov0" title="0">{
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if !success </span><span class="cov8" title="1">{
+                        lastRestart = handleServiceFailure(currentSvc, restartAllowed, remainingGrace, lastRestart)
+                }</span>
+
+                <span class="cov8" title="1">select </span>{
+                case &lt;-stopChan:<span class="cov8" title="1">
+                        return</span>
+                case &lt;-ticker.C:<span class="cov0" title="0"></span>
+                        // wait for next interval
+                }
+        }
+}
+
+func StartMonitoring() <span class="cov8" title="1">{
+        cfg, err := config.LoadConfig()
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Failed to load config for monitoring: %v", err)
+                return
+        }</span>
+
+        // Rebuild status.json to match config.json order
+        <span class="cov8" title="1">_ = config.UpdateStatus(func(s *config.Status) </span><span class="cov8" title="1">{
+                var newStatus []config.ServiceStatus
+                existing := make(map[string]config.ServiceStatus)
+                for _, es := range s.Services </span><span class="cov0" title="0">{
+                        existing[es.Name] = es
+                }</span>
+
+                <span class="cov8" title="1">for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                        if es, ok := existing[svc.Name]; ok </span><span class="cov0" title="0">{
+                                if es.LastStableStatus == "" </span><span class="cov0" title="0">{
+                                        es.LastStableStatus = es.Status
+                                        if es.LastStableStatus == "" </span><span class="cov0" title="0">{
+                                                es.LastStableStatus = "Unknown"
+                                        }</span>
+                                }
+                                <span class="cov0" title="0">newStatus = append(newStatus, es)</span>
+                        } else<span class="cov8" title="1"> {
+                                newStatus = append(newStatus, config.ServiceStatus{
+                                        Name:             svc.Name,
+                                        Status:           "Unknown",
+                                        LastStableStatus: "Unknown",
+                                })
+                                LogAction("System", fmt.Sprintf("Initialized status for new service: %s", svc.Name), "system")
+                        }</span>
+                }
+                <span class="cov8" title="1">s.Services = newStatus</span>
+        })
+
+        <span class="cov8" title="1">LogAction("System", "Monitoring threads started", "system")
+
+        // Start threads
+        for _, svc := range cfg.Services </span><span class="cov8" title="1">{
+                wg.Add(1)
+                go monitorService(svc)
+        }</span>
+}
+
+func StopMonitoring() <span class="cov8" title="1">{
+        close(stopChan) // broadcast stop to all goroutines
+        wg.Wait()
+        LogAction("System", "Monitoring threads stopped", "system")
+        // Recreate channel for potential restart in UI actions
+        stopChan = make(chan struct{})
+}</span>
+
+func RestartMonitoring() <span class="cov8" title="1">{
+        StopMonitoring()
+        StartMonitoring()
+}</span>
+</pre>
+
+		<pre class="file" id="file1" style="display: none">package monitor
+
+import (
+        "bytes"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "log"
+        "net/http"
+        "net/smtp"
+        "net/url"
+        "os"
+        "strconv"
+        "strings"
+        "time"
+
+        "github.com/arumes31/servworx/internal/config"
+)
+
+// isQuietHours checks if the current time falls inside the configured start and end hour range.
+func isQuietHours(now time.Time, start, end string) bool <span class="cov8" title="1">{
+        if start == "" || end == "" </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">nowHM := now.Format("15:04")
+        if start &lt; end </span><span class="cov8" title="1">{
+                return nowHM &gt;= start &amp;&amp; nowHM &lt;= end
+        }</span>
+        <span class="cov8" title="1">return nowHM &gt;= start || nowHM &lt;= end</span>
+}
+
+// SendNotification dispatches asynchronous alerts over enabled channels on status transitions
+func SendNotification(svc config.ServiceConfig, status string, detailMessage string) <span class="cov8" title="1">{
+        // Execute Quiet Hours and Snooze checks
+        if status != "Up" || (status == "Up" &amp;&amp; !svc.AlertOnRecovery) </span><span class="cov8" title="1">{
+                if svc.AlertSnoozeUntil &gt; time.Now().Unix() </span><span class="cov8" title="1">{
+                        LogAction("System", fmt.Sprintf("Alerts for service %s are currently snoozed. Skipping notification.", svc.Name), "system")
+                        return
+                }</span>
+                <span class="cov8" title="1">if isQuietHours(time.Now(), svc.QuietHoursStart, svc.QuietHoursEnd) </span><span class="cov8" title="1">{
+                        LogAction("System", fmt.Sprintf("Alerts for service %s are in Quiet Hours (%s to %s). Skipping notification.", svc.Name, svc.QuietHoursStart, svc.QuietHoursEnd), "system")
+                        return
+                }</span>
+        }
+
+        // Execute asynchronously in a goroutine so it never blocks the health check loop
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                LogAction("System", fmt.Sprintf("Dispatching %s status alerts for service %s...", status, svc.Name), "system")
+
+                if svc.EnableWebhook </span><span class="cov8" title="1">{
+                        if err := sendWebhook(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Webhook alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("Webhook alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnableTeams </span><span class="cov8" title="1">{
+                        if err := sendTeams(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("MS Teams alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("MS Teams alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnableTelegram </span><span class="cov8" title="1">{
+                        if err := sendTelegram(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Telegram alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("Telegram alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnableEmail </span><span class="cov8" title="1">{
+                        if err := sendEmail(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Email alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov0" title="0"> {
+                                LogAction("System", fmt.Sprintf("Email alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnableDiscord </span><span class="cov8" title="1">{
+                        if err := sendDiscord(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Discord alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("Discord alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnableGotify </span><span class="cov8" title="1">{
+                        if err := sendGotify(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Gotify alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("Gotify alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if svc.EnablePushover </span><span class="cov8" title="1">{
+                        if err := sendPushover(svc, status, detailMessage); err != nil </span><span class="cov8" title="1">{
+                                LogAction("System", fmt.Sprintf("Pushover alert failed for %s: %v", svc.Name, err), "error")
+                        }</span> else<span class="cov8" title="1"> {
+                                LogAction("System", fmt.Sprintf("Pushover alert successfully sent for %s", svc.Name), "system")
+                        }</span>
+                }
+        }()
+}
+
+type WebhookPayload struct {
+        Service   string `json:"service"`
+        URL       string `json:"url"`
+        Status    string `json:"status"`
+        Timestamp string `json:"timestamp"`
+        Message   string `json:"message"`
+}
+
+func sendWebhook(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        webhookURL := os.Getenv("NOTIFICATION_WEBHOOK_URL")
+        if webhookURL == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_WEBHOOK_URL is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">payload := WebhookPayload{
+                Service:   svc.Name,
+                URL:       svc.WebsiteURL,
+                Status:    status,
+                Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+                Message:   detail,
+        }
+
+        data, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // #nosec G107 G704
+        <span class="cov8" title="1">req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        // #nosec G704
+        resp, err := defaultHttpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("webhook responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendTeams(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        teamsURL := os.Getenv("NOTIFICATION_MSTEAMS_URL")
+        if teamsURL == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_MSTEAMS_URL is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">color := "FF0000" // Red for Down
+        emoji := "🚨"
+        if status == "Up" </span><span class="cov8" title="1">{
+                color = "00FF00" // Green for Up
+                emoji = "✅"
+        }</span>
+
+        <span class="cov8" title="1">card := map[string]interface{}{
+                "@type":      "MessageCard",
+                "@context":   "http://schema.org/extensions",
+                "themeColor": color,
+                "summary":    fmt.Sprintf("servworx Alert: %s is %s", svc.Name, status),
+                "title":      fmt.Sprintf("%s Service %s: %s", emoji, status, svc.Name),
+                "text": fmt.Sprintf("Service **%s** (%s) is now **%s**.&lt;br&gt;&lt;br&gt;**Detail:** %s&lt;br&gt;**Containers Managed:** %s",
+                        svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
+        }
+
+        data, err := json.Marshal(card)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // #nosec G107 G704
+        <span class="cov8" title="1">req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        // #nosec G704
+        resp, err := defaultHttpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("ms teams webhook responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendTelegram(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        token := os.Getenv("NOTIFICATION_TELEGRAM_TOKEN")
+        chatID := os.Getenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+        if token == "" || chatID == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_TELEGRAM_TOKEN or NOTIFICATION_TELEGRAM_CHAT_ID is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">emoji := "🚨"
+        if status == "Up" </span><span class="cov0" title="0">{
+                emoji = "✅"
+        }</span>
+
+        <span class="cov8" title="1">text := fmt.Sprintf("%s *servworx Alert*\n\n*Service:* %s\n*URL:* %s\n*Status:* %s\n\n*Detail:* %s\n*Containers:* `%s`",
+                emoji, svc.Name, svc.WebsiteURL, strings.ToUpper(status), detail, svc.ContainerNames)
+
+        payload := map[string]interface{}{
+                "chat_id":    chatID,
+                "text":       text,
+                "parse_mode": "Markdown",
+        }
+
+        data, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">baseURL := os.Getenv("NOTIFICATION_TELEGRAM_BASE_URL")
+        if baseURL == "" </span><span class="cov0" title="0">{
+                baseURL = "https://api.telegram.org"
+        }</span>
+        <span class="cov8" title="1">telegramURL := fmt.Sprintf("%s/bot%s/sendMessage", baseURL, token)
+        // #nosec G107 G704
+        req, err := http.NewRequest("POST", telegramURL, bytes.NewBuffer(data))
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("telegram request creation failed")
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        // #nosec G704
+        resp, err := defaultHttpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                // Sanitize error to prevent leaking the bot token from *url.Error
+                var urlErr *url.Error
+                if errors.As(err, &amp;urlErr) </span><span class="cov0" title="0">{
+                        return fmt.Errorf("telegram api request failed: connection error")
+                }</span>
+                <span class="cov0" title="0">return fmt.Errorf("telegram api request failed: %v", err)</span>
+        }
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("telegram api responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendEmail(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        host := os.Getenv("NOTIFICATION_SMTP_HOST")
+        portStr := os.Getenv("NOTIFICATION_SMTP_PORT")
+        user := os.Getenv("NOTIFICATION_SMTP_USER")
+        pass := os.Getenv("NOTIFICATION_SMTP_PASS")
+        from := os.Getenv("NOTIFICATION_SMTP_FROM")
+        to := os.Getenv("NOTIFICATION_SMTP_TO")
+
+        if host == "" || portStr == "" || from == "" || to == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_SMTP_HOST, PORT, FROM, or TO is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">port, err := strconv.Atoi(portStr)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid NOTIFICATION_SMTP_PORT: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">emoji := "🚨"
+        if status == "Up" </span><span class="cov0" title="0">{
+                emoji = "✅"
+        }</span>
+
+        <span class="cov8" title="1">subject := fmt.Sprintf("Subject: [servworx] %s Service %s: %s\n", emoji, status, svc.Name)
+        mime := "MIME-Version: 1.0;\nContent-Type: text/plain; charset=UTF-8;\n"
+        headers := fmt.Sprintf("From: %s\nTo: %s\n%s%s\n", from, to, mime, subject)
+        body := fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s\nTimestamp: %s\n",
+                svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames, time.Now().Format("2006-01-02 15:04:05"))
+
+        message := []byte(headers + body)
+
+        addr := fmt.Sprintf("%s:%d", host, port)
+
+        var auth smtp.Auth
+        if user != "" </span><span class="cov0" title="0">{
+                auth = smtp.PlainAuth("", user, pass, host)
+        }</span>
+
+        // SMTP SendMail (uses TLS handshake if port 465/587 or upgrades via STARTTLS natively if supported)
+        // #nosec G707
+        <span class="cov8" title="1">err = smtp.SendMail(addr, auth, from, []string{to}, message)
+        if err != nil </span><span class="cov8" title="1">{
+                // Log internal SMTP error but return it to be printed
+                log.Printf("SMTP failed to send mail: %v", err)
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendDiscord(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        discordURL := os.Getenv("NOTIFICATION_DISCORD_URL")
+        if discordURL == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_DISCORD_URL is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">color := 16711680 // Red for Down
+        emoji := "🚨"
+        if status == "Up" </span><span class="cov8" title="1">{
+                color = 65280 // Green for Up
+                emoji = "✅"
+        }</span>
+
+        <span class="cov8" title="1">payload := map[string]interface{}{
+                "embeds": []map[string]interface{}{
+                        {
+                                "title":       fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+                                "description": fmt.Sprintf("Service **%s** (%s) status changed to **%s**.\n\n**Detail:** %s\n**Containers:** `%s`",
+                                        svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
+                                "color":     color,
+                                "timestamp": time.Now().Format(time.RFC3339),
+                        },
+                },
+        }
+
+        data, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // #nosec G107 G704
+        <span class="cov8" title="1">req, err := http.NewRequest("POST", discordURL, bytes.NewBuffer(data))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        // #nosec G704
+        resp, err := defaultHttpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("discord responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendGotify(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        gotifyURL := os.Getenv("NOTIFICATION_GOTIFY_URL")
+        token := os.Getenv("NOTIFICATION_GOTIFY_TOKEN")
+        if gotifyURL == "" || token == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_GOTIFY_URL or NOTIFICATION_GOTIFY_TOKEN is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">gotifyURL = strings.TrimRight(gotifyURL, "/")
+        apiURL := fmt.Sprintf("%s/message?token=%s", gotifyURL, token)
+
+        emoji := "🚨"
+        priority := 8
+        if status == "Up" </span><span class="cov8" title="1">{
+                emoji = "✅"
+                priority = 5
+        }</span>
+
+        <span class="cov8" title="1">payload := map[string]interface{}{
+                "title":    fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+                "message":  fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s",
+                        svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
+                "priority": priority,
+        }
+
+        data, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // #nosec G107 G704
+        <span class="cov8" title="1">req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(data))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("Content-Type", "application/json")
+
+        // #nosec G704
+        resp, err := defaultHttpClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("gotify responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func sendPushover(svc config.ServiceConfig, status string, detail string) error <span class="cov8" title="1">{
+        token := os.Getenv("NOTIFICATION_PUSHOVER_TOKEN")
+        user := os.Getenv("NOTIFICATION_PUSHOVER_USER")
+        if token == "" || user == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("NOTIFICATION_PUSHOVER_TOKEN or NOTIFICATION_PUSHOVER_USER is not configured in environment")
+        }</span>
+
+        <span class="cov8" title="1">emoji := "🚨"
+        priority := "1"
+        if status == "Up" </span><span class="cov8" title="1">{
+                emoji = "✅"
+                priority = "0"
+        }</span>
+
+        <span class="cov8" title="1">form := url.Values{}
+        form.Set("token", token)
+        form.Set("user", user)
+        form.Set("title", fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status))
+        form.Set("message", fmt.Sprintf("Service: %s (%s) is now %s.\n\nDetail: %s\nContainers: %s",
+                svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames))
+        form.Set("priority", priority)
+
+        // #nosec G704
+        resp, err := defaultHttpClient.PostForm("https://api.pushover.net/1/messages.json", form)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ _ = resp.Body.Close() }</span>()
+
+        <span class="cov8" title="1">if resp.StatusCode &lt; 200 || resp.StatusCode &gt;= 300 </span><span class="cov8" title="1">{
+                return fmt.Errorf("pushover responded with non-2xx status: %d", resp.StatusCode)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// SendTestNotification triggers a single diagnostic test notification over a specific provider.
+func SendTestNotification(svc config.ServiceConfig, provider string) error <span class="cov8" title="1">{
+        detailMessage := "This is a diagnostic test alert sent from your servworx configuration dashboard. Your notification channel is working correctly!"
+        switch provider </span>{
+        case "webhook":<span class="cov8" title="1">
+                return sendWebhook(svc, "Test", detailMessage)</span>
+        case "teams":<span class="cov8" title="1">
+                return sendTeams(svc, "Test", detailMessage)</span>
+        case "telegram":<span class="cov8" title="1">
+                return sendTelegram(svc, "Test", detailMessage)</span>
+        case "email":<span class="cov8" title="1">
+                return sendEmail(svc, "Test", detailMessage)</span>
+        case "discord":<span class="cov8" title="1">
+                return sendDiscord(svc, "Test", detailMessage)</span>
+        case "gotify":<span class="cov8" title="1">
+                return sendGotify(svc, "Test", detailMessage)</span>
+        case "pushover":<span class="cov8" title="1">
+                return sendPushover(svc, "Test", detailMessage)</span>
+        default:<span class="cov8" title="1">
+                return fmt.Errorf("unknown notification provider: %s", provider)</span>
+        }
+}
+</pre>
+
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
