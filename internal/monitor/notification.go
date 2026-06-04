@@ -321,7 +321,7 @@ func sendDiscord(svc config.ServiceConfig, status string, detail string) error {
 	payload := map[string]interface{}{
 		"embeds": []map[string]interface{}{
 			{
-				"title":       fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+				"title": fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
 				"description": fmt.Sprintf("Service **%s** (%s) status changed to **%s**.\n\n**Detail:** %s\n**Containers:** `%s`",
 					svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
 				"color":     color,
@@ -373,8 +373,8 @@ func sendGotify(svc config.ServiceConfig, status string, detail string) error {
 	}
 
 	payload := map[string]interface{}{
-		"title":    fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
-		"message":  fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s",
+		"title": fmt.Sprintf("%s servworx Alert: %s is %s", emoji, svc.Name, status),
+		"message": fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s",
 			svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames),
 		"priority": priority,
 	}

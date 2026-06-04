@@ -19,6 +19,9 @@ var (
 
 	// ContainerNameRegex defines valid characters for a Docker container name.
 	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
+	cachedConfig *Config
+	cachedStatus *Status
 )
 
 // IsValidContainerName checks if a string is a valid Docker container name.
@@ -113,19 +116,50 @@ type ServiceStatus struct {
 	AlertCount       int     `json:"alert_count"`
 }
 
+// deepCopy creates a deep copy of the source object using JSON marshaling.
+func deepCopy(src, dst interface{}) error {
+	data, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, dst)
+}
+
+func ClearCache() {
+	configMutex.Lock()
+	cachedConfig = nil
+	configMutex.Unlock()
+
+	statusMutex.Lock()
+	cachedStatus = nil
+	statusMutex.Unlock()
+}
+
 // LoadConfig reads the configuration file. It creates one with defaults if it doesn't exist.
 func LoadConfig() (*Config, error) {
 	configMutex.RLock()
-	defer configMutex.RUnlock()
+	if cachedConfig != nil {
+		var cfg Config
+		err := deepCopy(cachedConfig, &cfg)
+		configMutex.RUnlock()
+		return &cfg, err
+	}
+	configMutex.RUnlock()
+
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	if cachedConfig != nil {
+		var cfg Config
+		err := deepCopy(cachedConfig, &cfg)
+		return &cfg, err
+	}
 
 	path := filepath.Join(ConfigDir, ConfigFile)
 	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, err // Handled by initialization
-		}
-		return nil, fmt.Errorf("failed to read config: %v", err)
+		return nil, err
 	}
 
 	var cfg Config
@@ -133,14 +167,16 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config json: %v", err)
 	}
 
-	// Ensure defaults
 	for i := range cfg.Services {
 		if cfg.Services[i].AcceptedStatusCodes == nil {
 			cfg.Services[i].AcceptedStatusCodes = []int{200}
 		}
 	}
 
-	return &cfg, nil
+	cachedConfig = &cfg
+	var result Config
+	err = deepCopy(cachedConfig, &result)
+	return &result, err
 }
 
 // SaveConfig writes the configuration file in a thread-safe manner.
@@ -158,22 +194,43 @@ func SaveConfig(cfg *Config) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+
+	var cached Config
+	if err := deepCopy(cfg, &cached); err != nil {
+		return err
+	}
+	cachedConfig = &cached
+	return nil
 }
 
 // LoadStatus reads the status file.
 func LoadStatus() (*Status, error) {
 	statusMutex.RLock()
-	defer statusMutex.RUnlock()
+	if cachedStatus != nil {
+		var status Status
+		err := deepCopy(cachedStatus, &status)
+		statusMutex.RUnlock()
+		return &status, err
+	}
+	statusMutex.RUnlock()
+
+	statusMutex.Lock()
+	defer statusMutex.Unlock()
+
+	if cachedStatus != nil {
+		var status Status
+		err := deepCopy(cachedStatus, &status)
+		return &status, err
+	}
 
 	path := filepath.Join(ConfigDir, StatusFile)
 	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to read status: %v", err)
+		return nil, err
 	}
 
 	var status Status
@@ -181,7 +238,10 @@ func LoadStatus() (*Status, error) {
 		return nil, fmt.Errorf("failed to parse status json: %v", err)
 	}
 
-	return &status, nil
+	cachedStatus = &status
+	var result Status
+	err = deepCopy(cachedStatus, &result)
+	return &result, err
 }
 
 // SaveStatus writes the status file in a thread-safe manner.
@@ -199,7 +259,16 @@ func SaveStatus(status *Status) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+
+	var cached Status
+	if err := deepCopy(status, &cached); err != nil {
+		return err
+	}
+	cachedStatus = &cached
+	return nil
 }
 
 // UpdateStatus atomically updates the status using a callback function.
@@ -207,23 +276,34 @@ func UpdateStatus(updateFn func(*Status)) error {
 	statusMutex.Lock()
 	defer statusMutex.Unlock()
 
-	path := filepath.Join(ConfigDir, StatusFile)
-	// #nosec G304
-	data, err := os.ReadFile(path)
+	if cachedStatus == nil {
+		path := filepath.Join(ConfigDir, StatusFile)
+		// #nosec G304
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			cachedStatus = &Status{
+				Services: []ServiceStatus{},
+			}
+		} else {
+			var status Status
+			if err := json.Unmarshal(data, &status); err != nil {
+				return err
+			}
+			cachedStatus = &status
+		}
+	}
+
 	var status Status
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		status.Services = []ServiceStatus{}
-	} else {
-		if err := json.Unmarshal(data, &status); err != nil {
-			return err
-		}
+	if err := deepCopy(cachedStatus, &status); err != nil {
+		return err
 	}
 
 	updateFn(&status)
 
+	path := filepath.Join(ConfigDir, StatusFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
@@ -233,7 +313,12 @@ func UpdateStatus(updateFn func(*Status)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0600)
+	if err := os.WriteFile(path, newData, 0600); err != nil {
+		return err
+	}
+
+	cachedStatus = &status
+	return nil
 }
 
 // UpdateConfig atomically updates the configuration using a callback function.
@@ -241,24 +326,35 @@ func UpdateConfig(updateFn func(*Config)) error {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 
-	path := filepath.Join(ConfigDir, ConfigFile)
-	// #nosec G304
-	data, err := os.ReadFile(path)
+	if cachedConfig == nil {
+		path := filepath.Join(ConfigDir, ConfigFile)
+		// #nosec G304
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			cachedConfig = &Config{
+				Users:    make(map[string]string),
+				Services: []ServiceConfig{},
+			}
+		} else {
+			var cfg Config
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				return err
+			}
+			cachedConfig = &cfg
+		}
+	}
+
 	var cfg Config
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		cfg.Users = make(map[string]string)
-		cfg.Services = []ServiceConfig{}
-	} else {
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return err
-		}
+	if err := deepCopy(cachedConfig, &cfg); err != nil {
+		return err
 	}
 
 	updateFn(&cfg)
 
+	path := filepath.Join(ConfigDir, ConfigFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
@@ -268,5 +364,10 @@ func UpdateConfig(updateFn func(*Config)) error {
 		return err
 	}
 
-	return os.WriteFile(path, newData, 0600)
+	if err := os.WriteFile(path, newData, 0600); err != nil {
+		return err
+	}
+
+	cachedConfig = &cfg
+	return nil
 }

@@ -14,6 +14,7 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 	// Setup temporary config
 	tmpDir := t.TempDir()
 	config.SetConfigDir(tmpDir)
+	config.ClearCache()
 
 	// Create config.json
 	cfgPath := filepath.Join(tmpDir, "config.json")
@@ -35,24 +36,25 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		index           string
+		name             string
+		index            string
 		expectAllBlocked bool
 	}{
 		{
-			name:            "Filtered malicious container, fallback to valid",
-			index:           "0",
+			name:             "Filtered malicious container, fallback to valid",
+			index:            "0",
 			expectAllBlocked: false,
 		},
 		{
-			name:            "All containers malicious",
-			index:           "1",
+			name:             "All containers malicious",
+			index:            "1",
 			expectAllBlocked: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			config.ClearCache()
 			req := httptest.NewRequest("GET", "/api/logs/stream/"+tt.index, nil)
 			// Mocking path value since it's used in parseIndex (mux.HandleFunc("GET /api/logs/stream/{index}"...))
 			req.SetPathValue("index", tt.index)

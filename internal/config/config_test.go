@@ -1,12 +1,12 @@
 package config
- 
+
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 )
- 
+
 func jsonEqual(a, b interface{}) bool {
 	aBytes, _ := json.Marshal(a)
 	bBytes, _ := json.Marshal(b)
@@ -32,7 +32,7 @@ func TestIsValidContainerName(t *testing.T) {
 		{"command injection attempt", "container; rm -rf /", false},
 		{"command injection attempt 2", "container $(whoami)", false},
 	}
- 
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsValidContainerName(tt.input); got != tt.expected {
@@ -43,10 +43,11 @@ func TestIsValidContainerName(t *testing.T) {
 }
 
 func TestConfigPersistence(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	cfg := &Config{
 		Users: map[string]string{"admin": "hash"},
@@ -74,10 +75,11 @@ func TestConfigPersistence(t *testing.T) {
 }
 
 func TestStatusPersistence(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	status := &Status{
 		Services: []ServiceStatus{
@@ -100,10 +102,11 @@ func TestStatusPersistence(t *testing.T) {
 }
 
 func TestAtomicUpdates(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	// Test UpdateConfig
 	err := UpdateConfig(func(cfg *Config) {
@@ -146,10 +149,11 @@ func TestAtomicUpdates(t *testing.T) {
 }
 
 func TestLoadNonExistent(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	_, err := LoadConfig()
 	if err == nil || !os.IsNotExist(err) {
@@ -163,10 +167,11 @@ func TestLoadNonExistent(t *testing.T) {
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	if err := os.WriteFile(filepath.Join(tmpDir, ConfigFile), []byte("invalid json"), 0600); err != nil {
 		t.Fatalf("Failed to write invalid config: %v", err)
@@ -186,10 +191,11 @@ func TestLoadInvalidJSON(t *testing.T) {
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	cfgJSON := `{
 		"users": {},
@@ -217,10 +223,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 }
 
 func TestUpdateStatusNewFile(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	// Ensure file does not exist
 	statusPath := filepath.Join(tmpDir, StatusFile)
@@ -245,10 +252,11 @@ func TestUpdateStatusNewFile(t *testing.T) {
 }
 
 func TestUpdateConfigNewFile(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	// Ensure file does not exist
 	configPath := filepath.Join(tmpDir, ConfigFile)
@@ -273,10 +281,11 @@ func TestUpdateConfigNewFile(t *testing.T) {
 }
 
 func TestUpdateInvalidJSON(t *testing.T) {
+	ClearCache()
 	tmpDir := t.TempDir()
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
-	t.Cleanup(func() { SetConfigDir(originalDir) })
+	t.Cleanup(func() { SetConfigDir(originalDir); ClearCache() })
 
 	if err := os.WriteFile(filepath.Join(tmpDir, ConfigFile), []byte("invalid json"), 0600); err != nil {
 		t.Fatalf("Failed to write invalid config: %v", err)
@@ -292,5 +301,80 @@ func TestUpdateInvalidJSON(t *testing.T) {
 	err = UpdateStatus(func(s *Status) {})
 	if err == nil {
 		t.Error("Expected error when updating invalid status JSON, got nil")
+	}
+}
+
+func TestCacheIsolation(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := ConfigDir
+	SetConfigDir(tmpDir)
+	t.Cleanup(func() {
+		SetConfigDir(originalDir)
+		ClearCache()
+	})
+	ClearCache()
+
+	cfg := &Config{
+		Users: map[string]string{"admin": "hash"},
+		Services: []ServiceConfig{
+			{Name: "Service1", AcceptedStatusCodes: []int{200}},
+		},
+	}
+	if err := SaveConfig(cfg); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Modify the loaded config
+	loaded.Users["admin"] = "modified"
+
+	// Load again, should not be modified (cache should return a copy)
+	loaded2, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig 2 failed: %v", err)
+	}
+
+	if loaded2.Users["admin"] != "hash" {
+		t.Errorf("Cache isolation failed: expected 'hash', got '%s'", loaded2.Users["admin"])
+	}
+}
+
+func TestUpdateStatusCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := ConfigDir
+	SetConfigDir(tmpDir)
+	t.Cleanup(func() {
+		SetConfigDir(originalDir)
+		ClearCache()
+	})
+	ClearCache()
+
+	status := &Status{
+		Services: []ServiceStatus{
+			{Name: "Service1", Status: "Up"},
+		},
+	}
+	if err := SaveStatus(status); err != nil {
+		t.Fatalf("SaveStatus failed: %v", err)
+	}
+
+	err := UpdateStatus(func(s *Status) {
+		s.Services[0].Status = "Down"
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus failed: %v", err)
+	}
+
+	loaded, err := LoadStatus()
+	if err != nil {
+		t.Fatalf("LoadStatus failed: %v", err)
+	}
+
+	if loaded.Services[0].Status != "Down" {
+		t.Errorf("UpdateStatus did not update cache/disk correctly, got %s", loaded.Services[0].Status)
 	}
 }

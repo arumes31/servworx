@@ -353,4 +353,3 @@ func TestIsQuietHours(t *testing.T) {
 		t.Error("expected empty quiet hours start/end to be inactive")
 	}
 }
-

@@ -58,13 +58,13 @@ func TestSendNotificationAllProvidersDispatched(t *testing.T) {
 	defer func() { defaultHttpClient = origClient }()
 
 	svc := config.ServiceConfig{
-		Name:          "AllProvidersSvc",
-		WebsiteURL:    "http://example.com",
-		EnableWebhook: true,
-		EnableTeams:   true,
+		Name:           "AllProvidersSvc",
+		WebsiteURL:     "http://example.com",
+		EnableWebhook:  true,
+		EnableTeams:    true,
 		EnableTelegram: true,
-		EnableDiscord: true,
-		EnableGotify:  true,
+		EnableDiscord:  true,
+		EnableGotify:   true,
 		EnablePushover: true,
 	}
 
