@@ -204,9 +204,7 @@ func TestConcurrentSessions(t *testing.T) {
 
 				gotUser, ok := GetSession(req)
 				if !ok || gotUser != username {
-					// We can't use t.Errorf in goroutines reliably without synchronization,
-					// but for this simple test it's often okay in Go 1.14+.
-					// However, it's better to just track errors.
+					t.Errorf("Concurrent session retrieval failed: ok=%v, gotUser=%s, want=%s", ok, gotUser, username)
 				}
 
 				w := httptest.NewRecorder()
