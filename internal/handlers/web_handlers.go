@@ -476,12 +476,20 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
 				continue
 			}
-			// #nosec G204
-			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", c)
-			out, _ := cmd.CombinedOutput()
-			outStr := string(out)
+			// Container name is validated by config.IsValidContainerName above, and the
+			// "--" end-of-options separator prevents the value from being interpreted as
+			// a docker flag (e.g. "-v", "--since"). This neutralises the command-injection
+			// vector flagged by gosec.
+			// #nosec G204 G702 -- validated, non-flag argument passed after "--"
+			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", "--", c)
+			out, err := cmd.CombinedOutput()
+			outStr := strings.TrimSpace(string(out))
 			if outStr == "" {
-				outStr = "No logs available"
+				if err != nil {
+					outStr = fmt.Sprintf("Error retrieving logs: %v", err)
+				} else {
+					outStr = "No logs available"
+				}
 			}
 			fmt.Fprintf(&logsBuilder, "Logs for %s:\n%s\n\n", c, outStr)
 		}
