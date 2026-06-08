@@ -229,7 +229,9 @@ func TestInitTemplates(t *testing.T) {
 
 	t.Run("Division by zero", func(t *testing.T) {
 		tmplContent0 := `{{define "zero.html"}}{{div 10 0}}{{end}}`
-		os.WriteFile(filepath.Join(tempDir, "zero.html"), []byte(tmplContent0), 0644)
+		if err := os.WriteFile(filepath.Join(tempDir, "zero.html"), []byte(tmplContent0), 0644); err != nil {
+			t.Fatalf("failed to write template file: %v", err)
+		}
 
 		// Re-init to include the new template
 		InitTemplates(tempDir)
