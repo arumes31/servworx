@@ -275,3 +275,35 @@ func TestAlertingRules(t *testing.T) {
 	}
 }
 
+
+func TestCalculateGracePeriod(t *testing.T) {
+	gracePeriod := 60 // 60 seconds
+
+	// Test case 1: No last restart (lastRestart = 0)
+	allowed, remaining := calculateGracePeriod(gracePeriod, 0)
+	if !allowed {
+		t.Errorf("Expected allowed=true when lastRestart is 0")
+	}
+	if remaining != 0 {
+		t.Errorf("Expected remaining=0 when lastRestart is 0, got %d", remaining)
+	}
+
+	// Test case 2: Recently restarted (lastRestart = now - 30s)
+	now := time.Now().Unix()
+	allowed, remaining = calculateGracePeriod(gracePeriod, now - 30)
+	if allowed {
+		t.Errorf("Expected allowed=false when recently restarted")
+	}
+	if remaining < 25 || remaining > 35 {
+		t.Errorf("Expected remaining grace period around 30s, got %d", remaining)
+	}
+
+	// Test case 3: Grace period elapsed (lastRestart = now - 90s)
+	allowed, remaining = calculateGracePeriod(gracePeriod, now - 90)
+	if !allowed {
+		t.Errorf("Expected allowed=true when grace period elapsed")
+	}
+	if remaining != 0 {
+		t.Errorf("Expected remaining=0 when grace period elapsed, got %d", remaining)
+	}
+}
