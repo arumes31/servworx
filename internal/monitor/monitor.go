@@ -153,7 +153,7 @@ func restartContainers(containerNames, serviceName string) int64 {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		// #nosec G204
-		cmd := exec.CommandContext(ctx, "docker", "restart", c)
+		cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error restarting %s: %v\n", c, err)
 		} else {

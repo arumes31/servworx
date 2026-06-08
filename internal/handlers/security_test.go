@@ -26,7 +26,11 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			},
 			{
 				"name": "PureMalicious",
-				"container_names": "evil; $(whoami), bad|pipe"
+				"container_names": "evil; jules, bad|pipe"
+			},
+			{
+				"name": "HyphenName",
+				"container_names": "-v, valid-name"
 			}
 		]
 	}`)
@@ -49,6 +53,11 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			name:             "All containers malicious",
 			index:            "1",
 			expectAllBlocked: true,
+		},
+		{
+			name:            "Hyphen prefixed name allowed but safe",
+			index:           "2",
+			expectAllBlocked: false,
 		},
 	}
 
