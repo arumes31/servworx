@@ -41,7 +41,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// Favicon Route serving our premium animated SVG
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/svg+xml")
-		fmt.Fprint(w, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+		_, _ = fmt.Fprint(w, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <defs>
     <filter id="glow">
       <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>

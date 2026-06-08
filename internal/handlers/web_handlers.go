@@ -451,7 +451,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 		if c != "" {
 			if !config.IsValidContainerName(c) {
 				monitor.LogAction(username, fmt.Sprintf("Invalid container name blocked from logs: %s", c), "error")
-				fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
+				_, _ = fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
 				continue
 			}
 			// Container name is validated by config.IsValidContainerName above, and the
@@ -469,7 +469,7 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 					outStr = "No logs available"
 				}
 			}
-			fmt.Fprintf(&logsBuilder, "Logs for %s:\n%s\n\n", c, outStr)
+			_, _ = fmt.Fprintf(&logsBuilder, "Logs for %s:\n%s\n\n", c, outStr)
 		}
 	}
 
@@ -542,7 +542,7 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
+		_, _ = fmt.Fprintf(w, `{"success": true, "message": "Service added successfully"}`)
 		return
 	}
 

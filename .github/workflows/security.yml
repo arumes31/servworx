@@ -26,8 +26,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.6
-          install-mode: "goinstall"
+          version: v2.12.2
 
       - name: Run Gosec
         run: |

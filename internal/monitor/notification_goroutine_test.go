@@ -27,27 +27,27 @@ func TestSendNotificationAllProvidersDispatched(t *testing.T) {
 	defer ts.Close()
 
 	// Set all providers
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
-	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
 	defer func() {
-		os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
-		os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
-		os.Unsetenv("NOTIFICATION_DISCORD_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+		_ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+		_ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+		_ = os.Unsetenv("NOTIFICATION_DISCORD_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
 	}()
 
 	origClient := defaultHttpClient
@@ -87,15 +87,15 @@ func TestSendNotificationAllProvidersDispatched(t *testing.T) {
 // TestSendNotificationEmailProvider tests the email path in SendNotification
 func TestSendNotificationEmailProvider(t *testing.T) {
 	// Email won't connect (no SMTP server), so it should error but not panic
-	os.Setenv("NOTIFICATION_SMTP_HOST", "127.0.0.1")
-	os.Setenv("NOTIFICATION_SMTP_PORT", "19998") // Nothing listening here
-	os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
-	os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_HOST", "127.0.0.1")
+	_ = os.Setenv("NOTIFICATION_SMTP_PORT", "19998") // Nothing listening here
+	_ = os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
 	defer func() {
-		os.Unsetenv("NOTIFICATION_SMTP_HOST")
-		os.Unsetenv("NOTIFICATION_SMTP_PORT")
-		os.Unsetenv("NOTIFICATION_SMTP_FROM")
-		os.Unsetenv("NOTIFICATION_SMTP_TO")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
 	}()
 
 	svc := config.ServiceConfig{
@@ -116,8 +116,8 @@ func TestSendNotificationWebhookFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	done := make(chan struct{}, 1)
 	// We'll wait a bit and confirm no panic
@@ -142,8 +142,8 @@ func TestSendNotificationTeamsFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:        "FailTeamsSvc",
@@ -161,13 +161,13 @@ func TestSendNotificationTelegramFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
-	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
 	defer func() {
-		os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
 	}()
 
 	svc := config.ServiceConfig{
@@ -185,8 +185,8 @@ func TestSendNotificationDiscordFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_DISCORD_URL")
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_DISCORD_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:          "FailDiscordSvc",
@@ -203,10 +203,10 @@ func TestSendNotificationGotifyFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_URL") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN") }()
 
 	svc := config.ServiceConfig{
 		Name:         "FailGotifySvc",
@@ -223,10 +223,10 @@ func TestSendNotificationPushoverFails(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER") }()
 
 	origClient := defaultHttpClient
 	defaultHttpClient = &http.Client{
@@ -255,8 +255,8 @@ func TestSendNotificationWebhookSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:          "SuccessWebhookSvc",

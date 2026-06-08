@@ -183,7 +183,7 @@ func TestGetNotificationProviders_AllMissing(t *testing.T) {
 		"NOTIFICATION_PUSHOVER_USER",
 	}
 	for _, v := range vars {
-		os.Unsetenv(v)
+		_ = os.Unsetenv(v)
 	}
 
 	providers := getNotificationProviders()
@@ -195,33 +195,33 @@ func TestGetNotificationProviders_AllMissing(t *testing.T) {
 }
 
 func TestGetNotificationProviders_AllPresent(t *testing.T) {
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", "http://hook")
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", "http://teams")
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
-	os.Setenv("NOTIFICATION_SMTP_HOST", "localhost")
-	os.Setenv("NOTIFICATION_SMTP_PORT", "587")
-	os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
-	os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
-	os.Setenv("NOTIFICATION_DISCORD_URL", "http://discord")
-	os.Setenv("NOTIFICATION_GOTIFY_URL", "http://gotify")
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "gtok")
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "ptok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "puser")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", "http://hook")
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", "http://teams")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
+	_ = os.Setenv("NOTIFICATION_SMTP_HOST", "localhost")
+	_ = os.Setenv("NOTIFICATION_SMTP_PORT", "587")
+	_ = os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", "http://discord")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", "http://gotify")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "gtok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "ptok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "puser")
 	defer func() {
-		os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
-		os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-		os.Unsetenv("NOTIFICATION_SMTP_HOST")
-		os.Unsetenv("NOTIFICATION_SMTP_PORT")
-		os.Unsetenv("NOTIFICATION_SMTP_FROM")
-		os.Unsetenv("NOTIFICATION_SMTP_TO")
-		os.Unsetenv("NOTIFICATION_DISCORD_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+		_ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+		_ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
+		_ = os.Unsetenv("NOTIFICATION_DISCORD_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
 	}()
 
 	providers := getNotificationProviders()
@@ -1033,7 +1033,7 @@ func TestHandleAPINotificationTestPOST_ProviderFails(t *testing.T) {
 	initTestTemplates(t)
 
 	// Unset webhook URL so it fails
-	os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
 
 	body := url.Values{"index": {"0"}, "provider": {"webhook"}}.Encode()
 	req := makeAuthenticatedRequest(t, "POST", "/api/notifications/test", body, "admin")
@@ -1055,8 +1055,8 @@ func TestHandleAPINotificationTestPOST_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	body := url.Values{"index": {"0"}, "provider": {"webhook"}}.Encode()
 	req := makeAuthenticatedRequest(t, "POST", "/api/notifications/test", body, "admin")
@@ -1437,7 +1437,7 @@ func TestHandleUpdateServicePOST_NotificationGuard(t *testing.T) {
 
 	// Clear all notification env vars
 	for _, v := range []string{"NOTIFICATION_WEBHOOK_URL", "NOTIFICATION_DISCORD_URL"} {
-		os.Unsetenv(v)
+		_ = os.Unsetenv(v)
 	}
 
 	body := url.Values{

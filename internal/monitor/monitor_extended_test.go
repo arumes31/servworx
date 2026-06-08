@@ -482,7 +482,7 @@ func TestLogAction(t *testing.T) {
 
 	LogAction("testuser", "test message", "user")
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
@@ -526,7 +526,7 @@ func TestCheckWebsiteGetError(t *testing.T) {
 			t.Fatal("webserver doesn't support hijacking")
 		}
 		conn, _, _ := hj.Hijack()
-		conn.Close()
+		_ = conn.Close()
 	}))
 	defer ts2.Close()
 

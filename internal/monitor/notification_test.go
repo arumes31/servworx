@@ -29,8 +29,8 @@ func TestSendWebhook(t *testing.T) {
 	defer ts.Close()
 
 	// Configure Env
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:           "TestService",
@@ -66,8 +66,8 @@ func TestSendTeams(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:           "TeamsService",
@@ -97,12 +97,14 @@ func TestSendTelegram(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "mock-token-12345")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "mock-chat-12345")
-	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-	defer os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-	defer os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "mock-token-12345")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "mock-chat-12345")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
+	defer func() {
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+	}()
 
 	svc := config.ServiceConfig{
 		Name:           "TelegramService",
@@ -124,8 +126,8 @@ func TestSendTelegram(t *testing.T) {
 }
 
 func TestSendTelegramMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-	os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+	_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+	_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
 
 	svc := config.ServiceConfig{Name: "Svc"}
 	err := sendTelegram(svc, "Down", "Err")
@@ -140,7 +142,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start mock SMTP server: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 	parts := strings.Split(addr, ":")
@@ -156,14 +158,14 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			serverErrChan <- err
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		reader := bufio.NewReader(conn)
 		writer := bufio.NewWriter(conn)
 
 		// 1. Greet Client
 		_, _ = writer.WriteString("220 mock.smtp.com\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 2. Read EHLO
 		line, _ := reader.ReadString('\n')
@@ -172,7 +174,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			return
 		}
 		_, _ = writer.WriteString("250-mock.smtp.com\r\n250 8BITMIME\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 3. Read MAIL FROM
 		line, _ = reader.ReadString('\n')
@@ -181,7 +183,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			return
 		}
 		_, _ = writer.WriteString("250 2.1.0 Ok\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 4. Read RCPT TO
 		line, _ = reader.ReadString('\n')
@@ -190,7 +192,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			return
 		}
 		_, _ = writer.WriteString("250 2.1.5 Ok\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 5. Read DATA
 		line, _ = reader.ReadString('\n')
@@ -199,7 +201,7 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			return
 		}
 		_, _ = writer.WriteString("354 Start mail input; end with <CRLF>.<CRLF>\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 6. Read Message content until .\r\n
 		for {
@@ -213,31 +215,31 @@ func TestSendEmailMockSMTP(t *testing.T) {
 			receivedEmail.WriteString(line)
 		}
 		_, _ = writer.WriteString("250 2.0.0 Ok: queued as 12345\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		// 7. Read QUIT
 		_, _ = reader.ReadString('\n')
 		_, _ = writer.WriteString("221 2.0.0 Bye\r\n")
-		writer.Flush()
+		_ = writer.Flush()
 
 		serverErrChan <- nil
 	}()
 
 	// Configure Env
-	os.Setenv("NOTIFICATION_SMTP_HOST", host)
-	os.Setenv("NOTIFICATION_SMTP_PORT", port)
-	os.Setenv("NOTIFICATION_SMTP_USER", "") // Unauthenticated SMTP mock
-	os.Setenv("NOTIFICATION_SMTP_PASS", "")
-	os.Setenv("NOTIFICATION_SMTP_FROM", "sender@example.com")
-	os.Setenv("NOTIFICATION_SMTP_TO", "receiver@example.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_HOST", host)
+	_ = os.Setenv("NOTIFICATION_SMTP_PORT", port)
+	_ = os.Setenv("NOTIFICATION_SMTP_USER", "") // Unauthenticated SMTP mock
+	_ = os.Setenv("NOTIFICATION_SMTP_PASS", "")
+	_ = os.Setenv("NOTIFICATION_SMTP_FROM", "sender@example.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_TO", "receiver@example.com")
 
 	defer func() {
-		os.Unsetenv("NOTIFICATION_SMTP_HOST")
-		os.Unsetenv("NOTIFICATION_SMTP_PORT")
-		os.Unsetenv("NOTIFICATION_SMTP_USER")
-		os.Unsetenv("NOTIFICATION_SMTP_PASS")
-		os.Unsetenv("NOTIFICATION_SMTP_FROM")
-		os.Unsetenv("NOTIFICATION_SMTP_TO")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_USER")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_PASS")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
 	}()
 
 	svc := config.ServiceConfig{
@@ -278,8 +280,8 @@ func TestSendDiscord(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_DISCORD_URL")
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_DISCORD_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:           "DiscordService",
@@ -310,10 +312,10 @@ func TestSendGotify(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "mock-token")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "mock-token")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_URL") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN") }()
 
 	svc := config.ServiceConfig{
 		Name:           "GotifyService",
@@ -335,8 +337,8 @@ func TestSendGotify(t *testing.T) {
 }
 
 func TestSendPushoverMissing(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-	os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+	_ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
+	_ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
 
 	svc := config.ServiceConfig{Name: "PushoverSvc"}
 	err := sendPushover(svc, "Down", "Err")

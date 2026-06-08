@@ -38,10 +38,10 @@ func TestSendPushover(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "test-token-abc")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "test-user-xyz")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "test-token-abc")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "test-user-xyz")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER") }()
 
 	origClient := defaultHttpClient
 	defaultHttpClient = &http.Client{
@@ -85,10 +85,10 @@ func TestSendPushoverUpStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "usr")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "usr")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER") }()
 
 	origClient := defaultHttpClient
 	defaultHttpClient = &http.Client{
@@ -114,10 +114,10 @@ func TestSendPushoverNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "usr")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-	defer os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "usr")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER") }()
 
 	origClient := defaultHttpClient
 	defaultHttpClient = &http.Client{
@@ -140,27 +140,27 @@ func TestSendTestNotificationAllProviders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
-	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_PUSHOVER_USER", "user")
 	defer func() {
-		os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
-		os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
-		os.Unsetenv("NOTIFICATION_DISCORD_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-		os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
-		os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
+		_ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+		_ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+		_ = os.Unsetenv("NOTIFICATION_DISCORD_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_URL")
+		_ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_PUSHOVER_USER")
 	}()
 
 	origClient := defaultHttpClient
@@ -188,10 +188,10 @@ func TestSendTestNotificationAllProviders(t *testing.T) {
 
 // TestSendTestNotificationEmail tests email provider via SendTestNotification (missing config)
 func TestSendTestNotificationEmail(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_SMTP_HOST")
-	os.Unsetenv("NOTIFICATION_SMTP_PORT")
-	os.Unsetenv("NOTIFICATION_SMTP_FROM")
-	os.Unsetenv("NOTIFICATION_SMTP_TO")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
 
 	svc := config.ServiceConfig{Name: "EmailTestSvc"}
 	err := SendTestNotification(svc, "email")
@@ -221,8 +221,8 @@ func TestSendNotificationSnoozed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:             "SnoozedSvc",
@@ -247,8 +247,8 @@ func TestSendNotificationQuietHours(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:            "QuietSvc",
@@ -277,8 +277,8 @@ func TestSendNotificationDispatches(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{
 		Name:          "ActiveSvc",
@@ -312,7 +312,7 @@ func TestIsQuietHoursOvernight(t *testing.T) {
 
 // TestSendWebhookMissingConfig verifies error when env var is missing
 func TestSendWebhookMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
 	svc := config.ServiceConfig{Name: "WH"}
 	err := sendWebhook(svc, "Down", "test")
 	if err == nil {
@@ -322,7 +322,7 @@ func TestSendWebhookMissingConfig(t *testing.T) {
 
 // TestSendTeamsMissingConfig verifies error when env var is missing
 func TestSendTeamsMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+	_ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
 	svc := config.ServiceConfig{Name: "Teams"}
 	err := sendTeams(svc, "Down", "test")
 	if err == nil {
@@ -332,7 +332,7 @@ func TestSendTeamsMissingConfig(t *testing.T) {
 
 // TestSendDiscordMissingConfig verifies error when env var is missing
 func TestSendDiscordMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_DISCORD_URL")
+	_ = os.Unsetenv("NOTIFICATION_DISCORD_URL")
 	svc := config.ServiceConfig{Name: "Discord"}
 	err := sendDiscord(svc, "Down", "test")
 	if err == nil {
@@ -342,8 +342,8 @@ func TestSendDiscordMissingConfig(t *testing.T) {
 
 // TestSendGotifyMissingConfig verifies error when env var is missing
 func TestSendGotifyMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-	os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+	_ = os.Unsetenv("NOTIFICATION_GOTIFY_URL")
+	_ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
 	svc := config.ServiceConfig{Name: "Gotify"}
 	err := sendGotify(svc, "Down", "test")
 	if err == nil {
@@ -353,10 +353,10 @@ func TestSendGotifyMissingConfig(t *testing.T) {
 
 // TestSendEmailMissingConfig verifies error when SMTP env is missing
 func TestSendEmailMissingConfig(t *testing.T) {
-	os.Unsetenv("NOTIFICATION_SMTP_HOST")
-	os.Unsetenv("NOTIFICATION_SMTP_PORT")
-	os.Unsetenv("NOTIFICATION_SMTP_FROM")
-	os.Unsetenv("NOTIFICATION_SMTP_TO")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+	_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
 	svc := config.ServiceConfig{Name: "Email"}
 	err := sendEmail(svc, "Down", "test")
 	if err == nil {
@@ -366,15 +366,15 @@ func TestSendEmailMissingConfig(t *testing.T) {
 
 // TestSendEmailInvalidPort verifies error when SMTP port is not a number
 func TestSendEmailInvalidPort(t *testing.T) {
-	os.Setenv("NOTIFICATION_SMTP_HOST", "localhost")
-	os.Setenv("NOTIFICATION_SMTP_PORT", "notanumber")
-	os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
-	os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_HOST", "localhost")
+	_ = os.Setenv("NOTIFICATION_SMTP_PORT", "notanumber")
+	_ = os.Setenv("NOTIFICATION_SMTP_FROM", "a@b.com")
+	_ = os.Setenv("NOTIFICATION_SMTP_TO", "c@d.com")
 	defer func() {
-		os.Unsetenv("NOTIFICATION_SMTP_HOST")
-		os.Unsetenv("NOTIFICATION_SMTP_PORT")
-		os.Unsetenv("NOTIFICATION_SMTP_FROM")
-		os.Unsetenv("NOTIFICATION_SMTP_TO")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_HOST")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_PORT")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_FROM")
+		_ = os.Unsetenv("NOTIFICATION_SMTP_TO")
 	}()
 	svc := config.ServiceConfig{Name: "Email"}
 	err := sendEmail(svc, "Down", "test")
@@ -390,8 +390,8 @@ func TestSendWebhookNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_WEBHOOK_URL")
+	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
 	svc := config.ServiceConfig{Name: "WH"}
 	err := sendWebhook(svc, "Down", "test")
@@ -407,8 +407,8 @@ func TestSendTeamsNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL") }()
 
 	svc := config.ServiceConfig{Name: "Teams"}
 	err := sendTeams(svc, "Down", "test")
@@ -427,8 +427,8 @@ func TestSendTeamsUpStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_MSTEAMS_URL")
+	_ = os.Setenv("NOTIFICATION_MSTEAMS_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_MSTEAMS_URL") }()
 
 	svc := config.ServiceConfig{Name: "TeamsUp", WebsiteURL: "http://ex.com", ContainerNames: "web"}
 	err := sendTeams(svc, "Up", "Recovered!")
@@ -450,8 +450,8 @@ func TestSendDiscordUpStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_DISCORD_URL")
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_DISCORD_URL") }()
 
 	svc := config.ServiceConfig{Name: "DiscordUp", WebsiteURL: "http://ex.com", ContainerNames: "web"}
 	err := sendDiscord(svc, "Up", "Recovered!")
@@ -476,10 +476,10 @@ func TestSendGotifyUpStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "tok")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_URL") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN") }()
 
 	svc := config.ServiceConfig{Name: "GotifyUp"}
 	err := sendGotify(svc, "Up", "Recovered!")
@@ -499,10 +499,10 @@ func TestSendGotifyNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
-	os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "bad-tok")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_URL")
-	defer os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN")
+	_ = os.Setenv("NOTIFICATION_GOTIFY_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_GOTIFY_TOKEN", "bad-tok")
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_URL") }()
+	defer func() { _ = os.Unsetenv("NOTIFICATION_GOTIFY_TOKEN") }()
 
 	svc := config.ServiceConfig{Name: "GotifyBad"}
 	err := sendGotify(svc, "Down", "test")
@@ -518,8 +518,8 @@ func TestSendDiscordNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
-	defer os.Unsetenv("NOTIFICATION_DISCORD_URL")
+	_ = os.Setenv("NOTIFICATION_DISCORD_URL", ts.URL)
+	defer func() { _ = os.Unsetenv("NOTIFICATION_DISCORD_URL") }()
 
 	svc := config.ServiceConfig{Name: "DiscordBad"}
 	err := sendDiscord(svc, "Down", "test")
@@ -535,13 +535,13 @@ func TestSendTelegramNon2xx(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
-	os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
-	os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_TOKEN", "tok")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_CHAT_ID", "chatid")
+	_ = os.Setenv("NOTIFICATION_TELEGRAM_BASE_URL", ts.URL)
 	defer func() {
-		os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
-		os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_TOKEN")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_CHAT_ID")
+		_ = os.Unsetenv("NOTIFICATION_TELEGRAM_BASE_URL")
 	}()
 
 	svc := config.ServiceConfig{Name: "TgBad"}

@@ -35,7 +35,7 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 	if errCfg != nil || errStatus != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, `{"error": "Failed to load configuration"}`)
+		_, _ = fmt.Fprintf(w, `{"error": "Failed to load configuration"}`)
 		return
 	}
 
@@ -106,7 +106,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetContainer == "" {
-		fmt.Fprintf(w, "data: No valid containers found\n\n")
+		_, _ = fmt.Fprintf(w, "data: No valid containers found\n\n")
 		flusher.Flush()
 		return
 	}
@@ -115,7 +115,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", "--", targetContainer)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
+		_, _ = fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
 		flusher.Flush()
 		return
 	}
@@ -123,7 +123,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(w, "data: Error starting logs command\n\n")
+		_, _ = fmt.Fprintf(w, "data: Error starting logs command\n\n")
 		flusher.Flush()
 		return
 	}
@@ -135,7 +135,7 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 			lines := strings.Split(string(buf[:n]), "\n")
 			for _, line := range lines {
 				if line != "" {
-					fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
+					_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
 				}
 			}
 			flusher.Flush()
@@ -156,7 +156,7 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"success": false, "error": "Invalid service index"}`)
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": "Invalid service index"}`)
 		return
 	}
 
@@ -164,7 +164,7 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	if provider == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"success": false, "error": "Provider not specified"}`)
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": "Provider not specified"}`)
 		return
 	}
 
@@ -172,7 +172,7 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	if err != nil || idx < 0 || idx >= len(cfg.Services) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"success": false, "error": "Service not found"}`)
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": "Service not found"}`)
 		return
 	}
 
@@ -183,9 +183,9 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		// #nosec G705
-		fmt.Fprintf(w, `{"success": false, "error": %q}`, err.Error())
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": %q}`, err.Error())
 	} else {
-		fmt.Fprintf(w, `{"success": true, "message": "Test alert dispatched successfully!"}`)
+		_, _ = fmt.Fprintf(w, `{"success": true, "message": "Test alert dispatched successfully!"}`)
 	}
 }
 
@@ -204,7 +204,7 @@ func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"success": false, "error": "Invalid duration"}`)
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": "Invalid duration"}`)
 		return
 	}
 
@@ -231,5 +231,5 @@ func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 	monitor.RestartMonitoring()
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"success": true, "message": %q}`, action)
+	_, _ = fmt.Fprintf(w, `{"success": true, "message": %q}`, action)
 }
