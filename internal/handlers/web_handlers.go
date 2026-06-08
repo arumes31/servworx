@@ -223,7 +223,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
-	
+
 	providers := getNotificationProviders()
 	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
 	enableTeams := r.FormValue("enable_teams") == "on" && providers["teams"]
