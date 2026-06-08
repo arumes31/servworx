@@ -1,6 +1,9 @@
 package monitor
 
 import (
+	"strings"
+	"io"
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -468,5 +471,70 @@ func TestUpdateServiceStatusRepeatDownNoRepeatInterval(t *testing.T) {
 	// AlertCount should remain unchanged (no repeat alerting)
 	if status.Services[0].AlertCount != 1 {
 		t.Errorf("expected AlertCount to remain 1, got %d", status.Services[0].AlertCount)
+	}
+}
+
+
+func TestLogAction(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	LogAction("testuser", "test message", "user")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	if !strings.Contains(output, "testuser") {
+		t.Errorf("Expected output to contain 'testuser', got: %s", output)
+	}
+	if !strings.Contains(output, "test message") {
+		t.Errorf("Expected output to contain 'test message', got: %s", output)
+	}
+	// Check for green color code
+	if !strings.Contains(output, "\033[92m") {
+		t.Errorf("Expected output to contain green color code, got: %s", output)
+	}
+}
+
+func TestCheckWebsiteInsecure(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	// This should succeed with insecureSkip=true
+	success, msg := checkWebsite(ts.URL, []int{200}, true)
+	if !success {
+		t.Errorf("expected success with insecure skip, got failure: %s", msg)
+	}
+}
+
+func TestCheckWebsiteGetError(t *testing.T) {
+	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		// Hijack connection and close it for GET
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("webserver doesn't support hijacking")
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer ts2.Close()
+
+	success, msg := checkWebsite(ts2.URL, []int{200}, false)
+	if success {
+		t.Error("expected failure for GET error, got success")
+	}
+	if !strings.Contains(msg, "Website is unreachable") {
+		t.Errorf("expected error message to contain 'Website is unreachable', got: %s", msg)
 	}
 }
