@@ -2,6 +2,8 @@ config/config.json
 config/status.json
 servworx.exe
 .env
+secrets/
+coverage.out
 temp/
 graphify-out/
 

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"net/http"
 	"sync"
 	"time"
@@ -19,9 +18,17 @@ type SessionData struct {
 }
 
 func GenerateSessionID() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
+	return rand.Text()
+}
+
+func DestroyUserSessions(username string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	for sessionID, data := range sessions {
+		if data.Username == username {
+			delete(sessions, sessionID)
+		}
+	}
 }
 
 func CreateSession(username string) string {

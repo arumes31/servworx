@@ -10,13 +10,27 @@ import (
 	"time"
 
 	"github.com/arumes31/servworx/internal/config"
+	"github.com/arumes31/servworx/internal/containerctl"
 	"github.com/arumes31/servworx/internal/handlers"
 	"github.com/arumes31/servworx/internal/monitor"
 )
 
 func main() {
+	if err := handlers.ConfigureTrustedProxies(os.Getenv("SERVWORX_TRUSTED_PROXY_CIDRS")); err != nil {
+		log.Fatalf("Invalid trusted proxy configuration: %v", err)
+	}
+	if err := monitor.ConfigureHTTPClient(os.Getenv("SERVWORX_CA_BUNDLE_FILE")); err != nil {
+		log.Fatalf("Invalid CA configuration: %v", err)
+	}
+	controller, err := containerctl.NewFromEnvironment()
+	if err != nil {
+		log.Fatalf("Container broker configuration failed: %v", err)
+	}
+	handlers.SetContainerController(controller)
+	monitor.SetContainerController(controller)
+
 	// 1. Initialize Default Config
-	err := config.InitDefaultFiles()
+	err = config.InitDefaultFiles()
 	if err != nil {
 		log.Fatalf("Failed to initialize default config/status files: %v", err)
 	}
@@ -29,9 +43,13 @@ func main() {
 	handlers.RegisterRoutes(mux)
 
 	server := &http.Server{
-		Addr:              "0.0.0.0:5000",
-		Handler:           mux,
-		ReadHeaderTimeout: 3 * time.Second,
+		Addr:              envOrDefault("SERVWORX_ADDR", "0.0.0.0:5000"),
+		Handler:           handlers.SecurityHeaders(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    32 << 10,
 	}
 
 	// 4. Start Background Monitor
@@ -60,4 +78,11 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 	monitor.LogAction("System", "Server exiting", "system")
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
 }

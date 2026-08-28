@@ -100,12 +100,12 @@ func TestCheckWebsite(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	success, msg := checkWebsite(ts.URL, []int{200})
 	if !success {
 		t.Errorf("expected success, got failure: %s", msg)
 	}
 
-	success, msg = checkWebsite(ts.URL, []int{200}, true)
+	success, msg = checkWebsite(ts.URL, []int{200})
 	if !success {
 		t.Errorf("expected success with insecure skip, got failure: %s", msg)
 	}
@@ -125,7 +125,7 @@ func TestCheckWebsiteFallback(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	success, msg := checkWebsite(ts.URL, []int{200})
 	if !success {
 		t.Errorf("expected success on fallback to GET, got failure: %s", msg)
 	}
@@ -275,7 +275,6 @@ func TestAlertingRules(t *testing.T) {
 	}
 }
 
-
 func TestCalculateGracePeriod(t *testing.T) {
 	gracePeriod := 60 // 60 seconds
 
@@ -290,7 +289,7 @@ func TestCalculateGracePeriod(t *testing.T) {
 
 	// Test case 2: Recently restarted (lastRestart = now - 30s)
 	now := time.Now().Unix()
-	allowed, remaining = calculateGracePeriod(gracePeriod, now - 30)
+	allowed, remaining = calculateGracePeriod(gracePeriod, now-30)
 	if allowed {
 		t.Errorf("Expected allowed=false when recently restarted")
 	}
@@ -299,7 +298,7 @@ func TestCalculateGracePeriod(t *testing.T) {
 	}
 
 	// Test case 3: Grace period elapsed (lastRestart = now - 90s)
-	allowed, remaining = calculateGracePeriod(gracePeriod, now - 90)
+	allowed, remaining = calculateGracePeriod(gracePeriod, now-90)
 	if !allowed {
 		t.Errorf("Expected allowed=true when grace period elapsed")
 	}

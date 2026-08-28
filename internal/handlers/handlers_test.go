@@ -1,7 +1,6 @@
 package handlers
 
 import (
-
 	"os"
 	"path/filepath"
 	"strings"

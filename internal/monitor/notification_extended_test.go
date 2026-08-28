@@ -231,7 +231,7 @@ func TestSendNotificationSnoozed(t *testing.T) {
 	}
 
 	SendNotification(svc, "Down", "service down")
-	time.Sleep(100 * time.Millisecond)
+	waitForNotifications()
 
 	if called {
 		t.Error("expected webhook NOT to be called when service is snoozed")
@@ -258,7 +258,7 @@ func TestSendNotificationQuietHours(t *testing.T) {
 	}
 
 	SendNotification(svc, "Down", "service down")
-	time.Sleep(100 * time.Millisecond)
+	waitForNotifications()
 
 	if called {
 		t.Error("expected webhook NOT to be called during quiet hours")
@@ -290,7 +290,7 @@ func TestSendNotificationDispatches(t *testing.T) {
 
 	select {
 	case <-done:
-		// Success
+		waitForNotifications()
 	case <-time.After(3 * time.Second):
 		t.Error("expected webhook to be called within 3 seconds")
 	}

@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -29,20 +29,20 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	isSecure := isSecureRequest(r)
 	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
 		"IsSecure": isSecure,
 	})
 }
 
 func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
-	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	isSecure := isSecureRequest(r)
 	if !isSecure {
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
 			"error":    "Login is only possible over a secure (HTTPS) connection.",
@@ -72,6 +72,11 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
 	}
+	if username == "admin" && checkPassword("changeme", storedHash) {
+		monitor.LogAction(username, "Blocked login with retired default credential", "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
+		return
+	}
 
 	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
 	if !strings.HasPrefix(storedHash, "$2") {
@@ -82,13 +87,6 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 	sessionID := auth.CreateSession(username)
 	auth.SetSessionCookie(w, sessionID)
 	monitor.LogAction(username, "Logged in", "user")
-
-	if username == "admin" {
-		if checkPassword("changeme", storedHash) {
-			http.Redirect(w, r, "/change_password", http.StatusSeeOther)
-			return
-		}
-	}
 
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
@@ -105,7 +103,7 @@ func HandleChangePasswordGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
 		return
@@ -120,9 +118,9 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(newPassword) < 8 {
+	if len(newPassword) < 16 {
 		monitor.LogAction(username, "Failed password change (weak password)", "error")
-		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Password must be at least 8 characters long"})
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Password must be at least 16 characters long"})
 		return
 	}
 
@@ -142,6 +140,9 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth.DestroyUserSessions(username)
+	sessionID := auth.CreateSession(username)
+	auth.SetSessionCookie(w, sessionID)
 	monitor.LogAction(username, "Changed password", "user")
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
@@ -190,7 +191,7 @@ func handleDeleteService(w http.ResponseWriter, r *http.Request, username string
 	monitor.LogAction(username, fmt.Sprintf("Deleted service: %s", deletedName), "user")
 	monitor.LogAction("System", fmt.Sprintf("Removed status for service: %s", deletedName), "system")
 
-	monitor.RestartMonitoring()
+	restartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
@@ -223,7 +224,6 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
-	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
 
 	providers := getNotificationProviders()
 	enableWebhook := r.FormValue("enable_webhook") == "on" && providers["webhook"]
@@ -260,7 +260,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		c.Services[idx].Interval = interval
 		c.Services[idx].GracePeriod = gracePeriod
 		c.Services[idx].AcceptedStatusCodes = codes
-		c.Services[idx].InsecureSkipVerify = insecureSkip
+		c.Services[idx].InsecureSkipVerify = false
 		c.Services[idx].EnableWebhook = enableWebhook
 		c.Services[idx].EnableTeams = enableTeams
 		c.Services[idx].EnableTelegram = enableTelegram
@@ -290,13 +290,16 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	}
 
 	monitor.LogAction(username, fmt.Sprintf("Updated service %d successfully", idx), "user")
-	monitor.RestartMonitoring()
+	restartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
 func HandleUpdateServicePOST(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-	_ = r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form body", http.StatusBadRequest)
+		return
+	}
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
 	if !ok {
@@ -362,10 +365,8 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				restartSucceeded = false
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			// #nosec G204
-			cmd := exec.CommandContext(ctx, "docker", "restart", c)
-			if err := cmd.Run(); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+			if err := containerController.Restart(ctx, c); err != nil {
 				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
 				restartSucceeded = false
 			}
@@ -420,7 +421,7 @@ func HandlePauseMonitoringPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	monitor.LogAction(username, fmt.Sprintf("Monitoring %s for service: %s", action, name), "user")
 
-	monitor.RestartMonitoring()
+	restartMonitoring()
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
 }
 
@@ -454,13 +455,12 @@ func HandleViewLogsGET(w http.ResponseWriter, r *http.Request) {
 				_, _ = fmt.Fprintf(&logsBuilder, "Logs for %s: [Invalid container name]\n\n", c)
 				continue
 			}
-			// Container name is validated by config.IsValidContainerName above, and the
-			// "--" end-of-options separator prevents the value from being interpreted as
-			// a docker flag (e.g. "-v", "--since"). This neutralises the command-injection
-			// vector flagged by gosec.
-			// #nosec G204 G702 -- validated, non-flag argument passed after "--"
-			cmd := exec.CommandContext(r.Context(), "docker", "logs", "--tail", "10", "--", c)
-			out, err := cmd.CombinedOutput()
+			logs, err := containerController.Logs(r.Context(), c, 10, false)
+			var out []byte
+			if err == nil {
+				out, err = io.ReadAll(io.LimitReader(logs, 1<<20))
+				_ = logs.Close()
+			}
 			outStr := strings.TrimSpace(string(out))
 			if outStr == "" {
 				if err != nil {
@@ -538,7 +538,7 @@ func HandleAddServicePOST(w http.ResponseWriter, r *http.Request) {
 	monitor.LogAction(username, fmt.Sprintf("Added new service: %s", newName), "user")
 	monitor.LogAction("System", fmt.Sprintf("Initialized status for new service: %s", newName), "system")
 
-	monitor.RestartMonitoring()
+	restartMonitoring()
 
 	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
 		w.Header().Set("Content-Type", "application/json")

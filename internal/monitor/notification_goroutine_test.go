@@ -82,6 +82,7 @@ func TestSendNotificationAllProvidersDispatched(t *testing.T) {
 			return
 		}
 	}
+	waitForNotifications()
 }
 
 // TestSendNotificationEmailProvider tests the email path in SendNotification
@@ -106,7 +107,7 @@ func TestSendNotificationEmailProvider(t *testing.T) {
 
 	// Should not panic; the goroutine will handle the error internally
 	SendNotification(svc, "Down", "email test")
-	time.Sleep(500 * time.Millisecond) // Give goroutine time to fail gracefully
+	waitForNotifications()
 }
 
 // TestSendNotificationWebhookFails covers the webhook error logging path
@@ -119,20 +120,13 @@ func TestSendNotificationWebhookFails(t *testing.T) {
 	_ = os.Setenv("NOTIFICATION_WEBHOOK_URL", ts.URL)
 	defer func() { _ = os.Unsetenv("NOTIFICATION_WEBHOOK_URL") }()
 
-	done := make(chan struct{}, 1)
-	// We'll wait a bit and confirm no panic
 	svc := config.ServiceConfig{
 		Name:          "FailWebhookSvc",
 		EnableWebhook: true,
 		WebsiteURL:    "http://example.com",
 	}
 	SendNotification(svc, "Down", "fail test")
-
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		done <- struct{}{}
-	}()
-	<-done // No panic = pass
+	waitForNotifications()
 }
 
 // TestSendNotificationTeamsFails covers the Teams error logging path
@@ -151,7 +145,7 @@ func TestSendNotificationTeamsFails(t *testing.T) {
 		WebsiteURL:  "http://example.com",
 	}
 	SendNotification(svc, "Down", "teams fail test")
-	time.Sleep(300 * time.Millisecond)
+	waitForNotifications()
 }
 
 // TestSendNotificationTelegramFails covers the Telegram error logging path
@@ -175,7 +169,7 @@ func TestSendNotificationTelegramFails(t *testing.T) {
 		EnableTelegram: true,
 	}
 	SendNotification(svc, "Down", "telegram fail test")
-	time.Sleep(300 * time.Millisecond)
+	waitForNotifications()
 }
 
 // TestSendNotificationDiscordFails covers the Discord error logging path
@@ -193,7 +187,7 @@ func TestSendNotificationDiscordFails(t *testing.T) {
 		EnableDiscord: true,
 	}
 	SendNotification(svc, "Down", "discord fail test")
-	time.Sleep(300 * time.Millisecond)
+	waitForNotifications()
 }
 
 // TestSendNotificationGotifyFails covers the Gotify error logging path
@@ -213,7 +207,7 @@ func TestSendNotificationGotifyFails(t *testing.T) {
 		EnableGotify: true,
 	}
 	SendNotification(svc, "Down", "gotify fail test")
-	time.Sleep(300 * time.Millisecond)
+	waitForNotifications()
 }
 
 // TestSendNotificationPushoverFails covers the Pushover error logging path
@@ -240,7 +234,7 @@ func TestSendNotificationPushoverFails(t *testing.T) {
 		EnablePushover: true,
 	}
 	SendNotification(svc, "Down", "pushover fail test")
-	time.Sleep(300 * time.Millisecond)
+	waitForNotifications()
 }
 
 // TestSendNotificationWebhookSuccess covers the webhook success logging path
@@ -267,6 +261,7 @@ func TestSendNotificationWebhookSuccess(t *testing.T) {
 
 	select {
 	case <-done:
+		waitForNotifications()
 	case <-time.After(3 * time.Second):
 		t.Error("timeout: expected webhook to be called")
 	}
