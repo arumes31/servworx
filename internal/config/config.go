@@ -18,7 +18,7 @@ var (
 	statusMutex sync.RWMutex
 
 	// ContainerNameRegex defines valid characters for a Docker container name.
-	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 	cachedConfig *Config
 	cachedStatus *Status
@@ -48,7 +48,7 @@ type ServiceConfig struct {
 	GracePeriod         int    `json:"grace_period"`
 	AcceptedStatusCodes []int  `json:"accepted_status_codes"`
 	Paused              bool   `json:"paused"`
-	InsecureSkipVerify  bool   `json:"insecure_skip_verify"`
+	InsecureSkipVerify  bool   `json:"insecure_skip_verify,omitempty"` // Deprecated: ignored; TLS verification is mandatory.
 	EnableWebhook       bool   `json:"enable_webhook"`
 	EnableTeams         bool   `json:"enable_teams"`
 	EnableTelegram      bool   `json:"enable_telegram"`

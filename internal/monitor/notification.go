@@ -12,10 +12,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/arumes31/servworx/internal/config"
 )
+
+var notificationWG sync.WaitGroup
 
 // isQuietHours checks if the current time falls inside the configured start and end hour range.
 func isQuietHours(now time.Time, start, end string) bool {
@@ -44,7 +47,9 @@ func SendNotification(svc config.ServiceConfig, status string, detailMessage str
 	}
 
 	// Execute asynchronously in a goroutine so it never blocks the health check loop
+	notificationWG.Add(1)
 	go func() {
+		defer notificationWG.Done()
 		LogAction("System", fmt.Sprintf("Dispatching %s status alerts for service %s...", status, svc.Name), "system")
 
 		if svc.EnableWebhook {
@@ -103,6 +108,10 @@ func SendNotification(svc config.ServiceConfig, status string, detailMessage str
 			}
 		}
 	}()
+}
+
+func waitForNotifications() {
+	notificationWG.Wait()
 }
 
 type WebhookPayload struct {

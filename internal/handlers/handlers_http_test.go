@@ -19,6 +19,9 @@ import (
 // initTestTemplates sets up minimal HTML templates for handler tests that call ExecuteTemplate
 func initTestTemplates(t *testing.T) {
 	t.Helper()
+	if err := ConfigureTrustedProxies("192.0.2.0/24"); err != nil {
+		t.Fatal(err)
+	}
 	templates = template.Must(template.New("").Funcs(template.FuncMap{
 		"div": func(a, b int) int {
 			if b == 0 {
@@ -90,8 +93,6 @@ func setupTestConfig(t *testing.T) (cleanup func()) {
 // ──────────────────────────────────────────────────────────────────────────────
 // hashPassword
 // ──────────────────────────────────────────────────────────────────────────────
-
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // migratePasswordToBcrypt
@@ -358,7 +359,7 @@ func TestHandleLoginPOST_SHA256Migration(t *testing.T) {
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 
-	// Should migrate and redirect to /change_password (default password is "changeme" which doesn't match)
+	// A valid legacy SHA-256 credential is migrated to bcrypt after authentication.
 	if rr.Code != http.StatusSeeOther {
 		t.Errorf("expected redirect after SHA256 login, got %d", rr.Code)
 	}
@@ -370,7 +371,7 @@ func TestHandleLoginPOST_SHA256Migration(t *testing.T) {
 	}
 }
 
-func TestHandleLoginPOST_AdminDefaultPasswordRedirect(t *testing.T) {
+func TestHandleLoginPOST_AdminDefaultPasswordRejected(t *testing.T) {
 	cleanup := setupTestConfig(t)
 	defer cleanup()
 	initTestTemplates(t)
@@ -388,11 +389,11 @@ func TestHandleLoginPOST_AdminDefaultPasswordRedirect(t *testing.T) {
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("expected redirect, got %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected rejected login page, got %d", rr.Code)
 	}
-	if rr.Header().Get("Location") != "/change_password" {
-		t.Errorf("expected redirect to /change_password for default password, got %s", rr.Header().Get("Location"))
+	if len(rr.Result().Cookies()) != 0 {
+		t.Error("legacy default credential must not create a session")
 	}
 }
 
@@ -528,11 +529,8 @@ func TestRequireAuth_AdminDefaultPassword(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler(rr, req)
 
-	if called {
-		t.Error("expected handler NOT to be called with default changeme password")
-	}
-	if rr.Code != http.StatusSeeOther {
-		t.Errorf("expected redirect to change_password, got %d", rr.Code)
+	if !called || rr.Code != http.StatusOK {
+		t.Errorf("expected an already-authenticated session to pass middleware, called=%v status=%d", called, rr.Code)
 	}
 }
 
@@ -1385,8 +1383,6 @@ func TestParseIndex_Invalid(t *testing.T) {
 // ──────────────────────────────────────────────────────────────────────────────
 // InitTemplates
 // ──────────────────────────────────────────────────────────────────────────────
-
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // HandleUpdateServicePOST — negative alert values

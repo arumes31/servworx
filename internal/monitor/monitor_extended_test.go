@@ -1,14 +1,15 @@
 package monitor
 
 import (
-	"strings"
-	"io"
 	"bytes"
+	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,7 +99,7 @@ func TestCheckWebsiteUnreachable(t *testing.T) {
 	url := ts.URL
 	ts.Close()
 
-	success, msg := checkWebsite(url, []int{200}, false)
+	success, msg := checkWebsite(url, []int{200})
 	if success {
 		t.Errorf("expected failure for unreachable server, got success: %s", msg)
 	}
@@ -111,7 +112,7 @@ func TestCheckWebsiteNonAcceptedStatusCode(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	success, msg := checkWebsite(ts.URL, []int{200})
 	if success {
 		t.Errorf("expected failure for 503, got success: %s", msg)
 	}
@@ -131,7 +132,7 @@ func TestCheckWebsite501Fallback(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	success, _ := checkWebsite(ts.URL, []int{200}, false)
+	success, _ := checkWebsite(ts.URL, []int{200})
 	if !success {
 		t.Error("expected success after GET fallback from 501")
 	}
@@ -151,7 +152,7 @@ func TestCheckWebsiteGetFallbackUnreachable(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	success, msg := checkWebsite(ts.URL, []int{200}, false)
+	success, msg := checkWebsite(ts.URL, []int{200})
 	if success {
 		t.Errorf("expected failure when GET also fails: %s", msg)
 	}
@@ -474,7 +475,6 @@ func TestUpdateServiceStatusRepeatDownNoRepeatInterval(t *testing.T) {
 	}
 }
 
-
 func TestLogAction(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
@@ -507,10 +507,25 @@ func TestCheckWebsiteInsecure(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// This should succeed with insecureSkip=true
-	success, msg := checkWebsite(ts.URL, []int{200}, true)
+	// The retired insecureSkip flag must no longer disable verification.
+	success, msg := checkWebsite(ts.URL, []int{200})
+	if success {
+		t.Errorf("expected self-signed certificate to fail closed, got: %s", msg)
+	}
+
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	certificate := ts.Certificate()
+	pemData := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})
+	if err := os.WriteFile(caFile, pemData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfigureHTTPClient(caFile); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ConfigureHTTPClient("") })
+	success, msg = checkWebsite(ts.URL, []int{200})
 	if !success {
-		t.Errorf("expected success with insecure skip, got failure: %s", msg)
+		t.Errorf("expected configured private CA to verify, got: %s", msg)
 	}
 }
 
@@ -530,7 +545,7 @@ func TestCheckWebsiteGetError(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	success, msg := checkWebsite(ts2.URL, []int{200}, false)
+	success, msg := checkWebsite(ts2.URL, []int{200})
 	if success {
 		t.Error("expected failure for GET error, got success")
 	}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -9,6 +10,29 @@ import (
 
 	"github.com/arumes31/servworx/internal/config"
 )
+
+func TestForwardedProtoRequiresTrustedProxy(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://servworx.test/login", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	if err := ConfigureTrustedProxies(""); err != nil {
+		t.Fatal(err)
+	}
+	if isSecureRequest(req) {
+		t.Error("direct client must not make an HTTP request secure with a forwarded header")
+	}
+
+	if err := ConfigureTrustedProxies("192.0.2.0/24"); err != nil {
+		t.Fatal(err)
+	}
+	if !isSecureRequest(req) {
+		t.Error("configured trusted proxy should be allowed to attest HTTPS")
+	}
+	req.Header.Add("X-Forwarded-Proto", "http")
+	if isSecureRequest(req) {
+		t.Error("ambiguous forwarded scheme headers must fail closed")
+	}
+}
 
 func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 	// Setup temporary config
@@ -55,8 +79,8 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			expectAllBlocked: true,
 		},
 		{
-			name:            "Hyphen prefixed name allowed but safe",
-			index:           "2",
+			name:             "Hyphen prefixed name allowed but safe",
+			index:            "2",
 			expectAllBlocked: false,
 		},
 	}

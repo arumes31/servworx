@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -111,45 +111,30 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// #nosec G204 G702
-	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", "--", targetContainer)
-	stdoutPipe, err := cmd.StdoutPipe()
+	logStream, err := containerController.Logs(r.Context(), targetContainer, 50, true)
 	if err != nil {
-		_, _ = fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
+		_, _ = fmt.Fprintf(w, "data: Error opening container logs\n\n")
 		flusher.Flush()
 		return
 	}
-
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		_, _ = fmt.Fprintf(w, "data: Error starting logs command\n\n")
-		flusher.Flush()
-		return
-	}
-
-	buf := make([]byte, 1024)
-	for {
-		n, err := stdoutPipe.Read(buf)
-		if n > 0 {
-			lines := strings.Split(string(buf[:n]), "\n")
-			for _, line := range lines {
-				if line != "" {
-					_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\r", ""))
-				}
-			}
+	defer func() { _ = logStream.Close() }()
+	scanner := bufio.NewScanner(logStream)
+	scanner.Buffer(make([]byte, 64<<10), 1<<20)
+	for scanner.Scan() {
+		line := strings.ReplaceAll(scanner.Text(), "\r", "")
+		if line != "" {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", line)
 			flusher.Flush()
 		}
-		if err != nil {
-			break
-		}
 	}
-	_ = cmd.Wait()
 }
 
 func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-	_ = r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form body", http.StatusBadRequest)
+		return
+	}
 
 	idxStr := r.FormValue("index")
 	idx, err := strconv.Atoi(idxStr)
@@ -190,8 +175,11 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-	_ = r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form body", http.StatusBadRequest)
+		return
+	}
 
 	username, _ := auth.GetSession(r)
 	idx, ok := parseIndex(w, r)
@@ -228,7 +216,7 @@ func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 		action = "Alerts unsnoozed"
 	}
 	monitor.LogAction(username, fmt.Sprintf("%s for service %s", action, svcName), "user")
-	monitor.RestartMonitoring()
+	restartMonitoring()
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = fmt.Fprintf(w, `{"success": true, "message": %q}`, action)

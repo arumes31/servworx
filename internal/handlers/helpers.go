@@ -15,10 +15,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/arumes31/servworx/internal/config"
+	"github.com/arumes31/servworx/internal/containerctl"
 	"github.com/arumes31/servworx/internal/monitor"
 )
 
-var templates *template.Template
+var (
+	templates           *template.Template
+	containerController containerctl.Controller = containerctl.UnavailableController{}
+	restartMonitoring                           = monitor.RestartMonitoring
+)
+
+const maxFormBody = 32 << 10
+
+func SetContainerController(controller containerctl.Controller) {
+	if controller == nil {
+		controller = containerctl.UnavailableController{}
+	}
+	containerController = controller
+}
 
 func InitTemplates(templateDir string) {
 	templates = template.Must(template.New("").Funcs(template.FuncMap{

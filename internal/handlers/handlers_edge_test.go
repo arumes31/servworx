@@ -312,7 +312,7 @@ func TestHandleUpdateServicePOST_InsecureSkipVerify(t *testing.T) {
 	}
 
 	cfg, _ := config.LoadConfig()
-	if !cfg.Services[0].InsecureSkipVerify {
-		t.Error("expected InsecureSkipVerify=true after update")
+	if cfg.Services[0].InsecureSkipVerify {
+		t.Error("expected retired InsecureSkipVerify setting to be ignored")
 	}
 }

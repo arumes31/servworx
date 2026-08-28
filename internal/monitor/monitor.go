@@ -3,12 +3,12 @@ package monitor
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/arumes31/servworx/internal/config"
+	"github.com/arumes31/servworx/internal/containerctl"
 )
 
 var (
@@ -24,14 +25,11 @@ var (
 
 	defaultHttpClient = &http.Client{
 		Timeout: 5 * time.Second,
-	}
-	insecureHttpClient = &http.Client{
-		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
-			// #nosec G402
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			Proxy: http.ProxyFromEnvironment,
 		},
 	}
+	containerController containerctl.Controller = containerctl.UnavailableController{}
 
 	// In-memory health check history (not persisted to disk)
 	healthHistory = make(map[string][]string)
@@ -88,12 +86,38 @@ func LogAction(username, action, logType string) {
 	fmt.Printf("%s[%s] %s: %s%s\n", color, timestamp, username, action, colorReset)
 }
 
-func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, string) {
-	httpClient := defaultHttpClient
-	if insecureSkip {
-		httpClient = insecureHttpClient
+func SetContainerController(controller containerctl.Controller) {
+	if controller == nil {
+		controller = containerctl.UnavailableController{}
 	}
-	resp, err := httpClient.Head(url)
+	containerController = controller
+}
+
+func ConfigureHTTPClient(caFile string) error {
+	transport := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile) // #nosec G304 -- operator-configured CA bundle
+		if err != nil {
+			return fmt.Errorf("read CA bundle: %w", err)
+		}
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(pem) {
+			return fmt.Errorf("CA bundle %q contains no certificates", caFile)
+		}
+		transport.TLSClientConfig.RootCAs = roots
+	}
+	defaultHttpClient = &http.Client{Timeout: 5 * time.Second, Transport: transport}
+	return nil
+}
+
+func checkWebsite(url string, acceptedCodes []int) (bool, string) {
+	resp, err := defaultHttpClient.Head(url)
 	if err != nil {
 		return false, fmt.Sprintf("Website is unreachable: %v", err)
 	}
@@ -108,7 +132,7 @@ func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, str
 
 	// Only fall back to GET if HEAD returned 405/501 and the code wasn't explicitly accepted
 	if resp.StatusCode == 405 || resp.StatusCode == 501 {
-		resp2, err2 := httpClient.Get(url)
+		resp2, err2 := defaultHttpClient.Get(url)
 		if err2 != nil {
 			return false, fmt.Sprintf("Website is unreachable: %v", err2)
 		}
@@ -151,10 +175,8 @@ func restartContainers(containerNames, serviceName string) int64 {
 		}
 		fmt.Printf("Executing 'docker restart %s'\n", c)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		// #nosec G204
-		cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
-		if err := cmd.Run(); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+		if err := containerController.Restart(ctx, c); err != nil {
 			fmt.Printf("Error restarting %s: %v\n", c, err)
 		} else {
 			fmt.Printf("Completed 'docker restart %s'\n", c)
@@ -333,7 +355,7 @@ func checkWithRetries(svc *config.ServiceConfig) (bool, bool) {
 	success := false
 	var message string
 	for i := 1; i <= svc.Retries; i++ {
-		success, message = checkWebsite(svc.WebsiteURL, svc.AcceptedStatusCodes, svc.InsecureSkipVerify)
+		success, message = checkWebsite(svc.WebsiteURL, svc.AcceptedStatusCodes)
 
 		status := "Down"
 		if success {
