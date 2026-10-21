@@ -7,8 +7,8 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Maintain dependencies for pip (requirements.txt)
-  - package-ecosystem: "pip"
+  # Maintain Go module dependencies
+  - package-ecosystem: "gomod"
     directory: "/"
     target-branch: "main"
     schedule:
