@@ -256,6 +256,11 @@ func sendTelegram(svc config.ServiceConfig, status string, detail string) error 
 	return nil
 }
 
+// headerSafe strips CR and LF so a value cannot inject additional mail headers.
+func headerSafe(v string) string {
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(v)
+}
+
 func sendEmail(svc config.ServiceConfig, status string, detail string) error {
 	host := os.Getenv("NOTIFICATION_SMTP_HOST")
 	portStr := os.Getenv("NOTIFICATION_SMTP_PORT")
@@ -278,9 +283,9 @@ func sendEmail(svc config.ServiceConfig, status string, detail string) error {
 		emoji = "✅"
 	}
 
-	subject := fmt.Sprintf("Subject: [servworx] %s Service %s: %s\n", emoji, status, svc.Name)
+	subject := fmt.Sprintf("Subject: [servworx] %s Service %s: %s\n", emoji, headerSafe(status), headerSafe(svc.Name))
 	mime := "MIME-Version: 1.0;\nContent-Type: text/plain; charset=UTF-8;\n"
-	headers := fmt.Sprintf("From: %s\nTo: %s\n%s%s\n", from, to, mime, subject)
+	headers := fmt.Sprintf("From: %s\nTo: %s\n%s%s\n", headerSafe(from), headerSafe(to), mime, subject)
 	body := fmt.Sprintf("Service: %s (%s)\nStatus: %s\n\nDetail: %s\nContainers: %s\nTimestamp: %s\n",
 		svc.Name, svc.WebsiteURL, status, detail, svc.ContainerNames, time.Now().Format("2006-01-02 15:04:05"))
 

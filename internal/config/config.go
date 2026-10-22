@@ -18,7 +18,14 @@ var (
 	statusMutex sync.RWMutex
 
 	// ContainerNameRegex defines valid characters for a Docker container name.
-	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	// Like Docker itself, the first character must be alphanumeric so a name can
+	// never be parsed as a command-line flag (e.g. "-t0").
+	ContainerNameRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
+	// ServiceNameRegex defines valid characters for a service name. It matches
+	// the pattern enforced by the web UI and keeps names safe for use in
+	// notification headers (no CR/LF).
+	ServiceNameRegex = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 	cachedConfig *Config
 	cachedStatus *Status
@@ -27,6 +34,11 @@ var (
 // IsValidContainerName checks if a string is a valid Docker container name.
 func IsValidContainerName(name string) bool {
 	return ContainerNameRegex.MatchString(name)
+}
+
+// IsValidServiceName checks if a string is a valid service name.
+func IsValidServiceName(name string) bool {
+	return ServiceNameRegex.MatchString(name)
 }
 
 // SetConfigDir allows overriding the config directory for local testing

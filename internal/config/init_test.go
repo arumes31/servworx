@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,6 +14,8 @@ func TestInitDefaultFiles(t *testing.T) {
 	originalDir := ConfigDir
 	SetConfigDir(tmpDir)
 	defer SetConfigDir(originalDir)
+
+	t.Setenv("ADMIN_PASSWORD", "initial-secret-1")
 
 	// Test 1: Files don't exist
 	err := InitDefaultFiles()
@@ -38,9 +41,9 @@ func TestInitDefaultFiles(t *testing.T) {
 	if _, ok := cfg.Users["admin"]; !ok {
 		t.Errorf("Default admin user not found")
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("changeme"))
+	err = bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("initial-secret-1"))
 	if err != nil {
-		t.Errorf("Default password hash is incorrect: %v", err)
+		t.Errorf("Admin password hash does not match ADMIN_PASSWORD: %v", err)
 	}
 	if len(cfg.Services) != 1 || cfg.Services[0].Name != "Service1" {
 		t.Errorf("Default service not found or incorrect")
@@ -71,5 +74,57 @@ func TestInitDefaultFiles(t *testing.T) {
 	cfg, _ = LoadConfig()
 	if _, ok := cfg.Users["newuser"]; !ok {
 		t.Errorf("InitDefaultFiles overwrote existing config")
+	}
+}
+
+func TestInitDefaultFiles_GeneratedPassword(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir := ConfigDir
+	SetConfigDir(tmpDir)
+	defer SetConfigDir(originalDir)
+	ClearCache()
+	defer ClearCache()
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	if err := InitDefaultFiles(); err != nil {
+		t.Fatalf("InitDefaultFiles failed: %v", err)
+	}
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load created config: %v", err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("changeme")) == nil {
+		t.Error("Default admin password must not be the well-known 'changeme'")
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, InitialPasswordFile))
+	if err != nil {
+		t.Fatalf("initial password file not written: %v", err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte(strings.TrimSpace(string(data)))) != nil {
+		t.Error("initial password file does not match the stored hash")
+	}
+
+	RemoveInitialPasswordFile()
+	if _, err := os.Stat(filepath.Join(tmpDir, InitialPasswordFile)); !os.IsNotExist(err) {
+		t.Error("initial password file was not removed")
+	}
+}
+
+func TestInitialAdminPassword(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", "short")
+	if _, _, err := initialAdminPassword(); err == nil {
+		t.Error("expected error for ADMIN_PASSWORD shorter than 8 characters")
+	}
+
+	t.Setenv("ADMIN_PASSWORD", "")
+	p1, generated, err := initialAdminPassword()
+	if err != nil || !generated || len(p1) < 16 {
+		t.Fatalf("expected generated password, got %q generated=%v err=%v", p1, generated, err)
+	}
+	p2, _, _ := initialAdminPassword()
+	if p1 == p2 {
+		t.Error("expected different random passwords")
 	}
 }
