@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ func HandleLoginGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	isSecure := isSecureRequest(r)
 	_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
 		"IsSecure": isSecure,
 	})
@@ -42,8 +43,7 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	if !isSecure {
+	if !isSecureRequest(r) {
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]interface{}{
 			"error":    "Login is only possible over a secure (HTTPS) connection.",
 			"IsSecure": false,
@@ -54,6 +54,15 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	ipKey := clientIP(r)
+	now := time.Now()
+	if ipLoginLimiter.lockedFor(ipKey, now) > 0 || userLoginLimiter.lockedFor(username, now) > 0 {
+		monitor.LogAction(username, fmt.Sprintf("Login blocked: too many failed attempts (client %s)", ipKey), "error")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Too many failed login attempts. Please try again later."})
+		return
+	}
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "System error loading config"})
@@ -62,16 +71,23 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 
 	storedHash, exists := cfg.Users[username]
 	if !exists {
-		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
+		// Compare against a dummy hash so unknown usernames take as long as known ones.
+		storedHash = dummyPasswordHash()
+	}
+
+	if !checkPassword(password, storedHash) || !exists {
+		ipLocked := ipLoginLimiter.fail(ipKey, now)
+		userLocked := userLoginLimiter.fail(username, now)
+		monitor.LogAction(username, fmt.Sprintf("Failed login attempt (invalid credentials, client %s)", ipKey), "error")
+		if ipLocked || userLocked {
+			monitor.LogAction("System", fmt.Sprintf("Login temporarily locked for user %q / client %s after repeated failures", username, ipKey), "error")
+		}
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
 		return
 	}
 
-	if !checkPassword(password, storedHash) {
-		monitor.LogAction(username, "Failed login attempt (invalid credentials)", "error")
-		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
-		return
-	}
+	ipLoginLimiter.reset(ipKey)
+	userLoginLimiter.reset(username)
 
 	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
 	if !strings.HasPrefix(storedHash, "$2") {
@@ -111,8 +127,20 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.GetSession(r)
+	currentPassword := r.FormValue("current_password")
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "System error loading config"})
+		return
+	}
+	if !checkPassword(currentPassword, cfg.Users[username]) {
+		monitor.LogAction(username, "Failed password change (wrong current password)", "error")
+		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Current password is incorrect"})
+		return
+	}
 
 	if newPassword != confirmPassword {
 		monitor.LogAction(username, "Failed password change (passwords do not match)", "error")
@@ -141,6 +169,9 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 		_ = templates.ExecuteTemplate(w, "change_password.html", map[string]string{"error": "Failed to save new password"})
 		return
 	}
+
+	// Sign out all other sessions of this user.
+	auth.DestroyOtherSessions(r, username)
 
 	monitor.LogAction(username, "Changed password", "user")
 	http.Redirect(w, r, "/config", http.StatusSeeOther)
@@ -223,6 +254,18 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 
 	oldName := cfg.Services[idx].Name
 	newName := r.FormValue("name")
+	if !config.IsValidServiceName(newName) {
+		monitor.LogAction(username, "Invalid service name provided", "error")
+		renderConfigWithError(w, "Service name may only contain letters, digits, dashes and underscores")
+		return
+	}
+
+	websiteURL := r.FormValue("website_url")
+	if u, err := url.Parse(websiteURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		monitor.LogAction(username, "Invalid website URL provided", "error")
+		renderConfigWithError(w, "Website URL must be an http:// or https:// URL")
+		return
+	}
 	insecureSkip := r.FormValue("insecure_skip_verify") == "on"
 
 	providers := getNotificationProviders()
@@ -254,7 +297,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 
 	_ = config.UpdateConfig(func(c *config.Config) {
 		c.Services[idx].Name = newName
-		c.Services[idx].WebsiteURL = r.FormValue("website_url")
+		c.Services[idx].WebsiteURL = websiteURL
 		c.Services[idx].ContainerNames = containerNames
 		c.Services[idx].Retries = retries
 		c.Services[idx].Interval = interval
@@ -363,8 +406,9 @@ func HandleForceRestartPOST(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			// #nosec G204
-			cmd := exec.CommandContext(ctx, "docker", "restart", c)
+			// The "--" separator keeps the validated name from being parsed as a flag.
+			// #nosec G204 -- validated, non-flag argument passed after "--"
+			cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
 			if err := cmd.Run(); err != nil {
 				monitor.LogAction(user, fmt.Sprintf("Error restarting container %s: %v", c, err), "error")
 				restartSucceeded = false

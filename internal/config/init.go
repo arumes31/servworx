@@ -1,7 +1,10 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
 
 	"golang.org/x/crypto/bcrypt"
@@ -32,7 +35,14 @@ func initConfig() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	defaultCfg, err := createDefaultConfig()
+	// The initial admin password comes from ADMIN_PASSWORD, or is generated
+	// randomly and printed once to stdout. There is no well-known default.
+	password, generated, err := initialAdminPassword()
+	if err != nil {
+		return err
+	}
+
+	defaultCfg, err := createDefaultConfig(password)
 	if err != nil {
 		return err
 	}
@@ -41,7 +51,31 @@ func initConfig() error {
 		return fmt.Errorf("failed to save default config: %w", err)
 	}
 
+	if generated {
+		log.Printf("Created initial admin account. Username: admin  Password: %s", password)
+		log.Printf("This password is shown only once. Change it after logging in, or set ADMIN_PASSWORD before the first start.")
+	} else {
+		log.Printf("Created initial admin account from ADMIN_PASSWORD")
+	}
+
 	return nil
+}
+
+// initialAdminPassword returns the password for the first-run admin account and
+// whether it was generated randomly.
+func initialAdminPassword() (string, bool, error) {
+	if p := os.Getenv("ADMIN_PASSWORD"); p != "" {
+		if len(p) < 8 {
+			return "", false, fmt.Errorf("ADMIN_PASSWORD must be at least 8 characters long")
+		}
+		return p, false, nil
+	}
+
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		return "", false, fmt.Errorf("failed to generate initial admin password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), true, nil
 }
 
 func initStatus() error {
@@ -62,8 +96,8 @@ func initStatus() error {
 	return nil
 }
 
-func createDefaultConfig() (*Config, error) {
-	adminHash, err := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
+func createDefaultConfig(adminPassword string) (*Config, error) {
+	adminHash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash default password: %w", err)
 	}

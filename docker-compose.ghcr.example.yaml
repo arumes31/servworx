@@ -1,10 +1,20 @@
 services:
   monitor:
     container_name: servworx
+    # Consider pinning a specific tag (e.g. :sha-<commit>) or digest instead of :latest
     image: ghcr.io/arumes31/servworx:latest
     ports:
       - "7676:5000"
     environment:
+      # --- Initial admin password (first start only; otherwise a random one is printed to the log) ---
+      # - ADMIN_PASSWORD=change-this-to-a-long-secret
+
+      # --- Reverse proxies allowed to set X-Forwarded-* (default: loopback + private ranges) ---
+      # - TRUSTED_PROXIES=172.18.0.0/16
+
+      # --- Use a Docker socket proxy instead of mounting /var/run/docker.sock ---
+      # - DOCKER_HOST=tcp://docker-socket-proxy:2375
+
       # --- Webhook Notification ---
       # - NOTIFICATION_WEBHOOK_URL=http://your-webhook-endpoint.local/alert
       

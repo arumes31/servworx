@@ -28,6 +28,7 @@ func CreateSession(username string) string {
 	sessionID := GenerateSessionID()
 	mutex.Lock()
 	defer mutex.Unlock()
+	pruneExpiredLocked(time.Now())
 	sessions[sessionID] = SessionData{
 		Username:  username,
 		ExpiresAt: time.Now().Add(24 * time.Hour), // 24 hour session
@@ -58,6 +59,33 @@ func GetSession(r *http.Request) (string, bool) {
 	}
 
 	return data.Username, true
+}
+
+// pruneExpiredLocked removes expired sessions so the map does not grow with
+// every login. The caller must hold mutex.
+func pruneExpiredLocked(now time.Time) {
+	for id, data := range sessions {
+		if now.After(data.ExpiresAt) {
+			delete(sessions, id)
+		}
+	}
+}
+
+// DestroyOtherSessions removes every session of username except the one used
+// by the current request, e.g. after a password change.
+func DestroyOtherSessions(r *http.Request, username string) {
+	currentID := ""
+	if cookie, err := r.Cookie("session_id"); err == nil {
+		currentID = cookie.Value
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	for id, data := range sessions {
+		if data.Username == username && id != currentID {
+			delete(sessions, id)
+		}
+	}
 }
 
 func DestroySession(w http.ResponseWriter, r *http.Request) {

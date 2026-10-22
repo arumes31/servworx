@@ -30,7 +30,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              "0.0.0.0:5000",
-		Handler:           mux,
+		Handler:           handlers.Protect(mux),
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 

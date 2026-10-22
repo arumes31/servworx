@@ -57,10 +57,12 @@ func setupTestConfig(t *testing.T) (cleanup func()) {
 	tmpDir := t.TempDir()
 	originalDir := config.ConfigDir
 	config.SetConfigDir(tmpDir)
+	resetLoginLimiters()
 
 	// Seed minimal config
+	adminHash, _ := hashPassword("password")
 	cfg := &config.Config{
-		Users: map[string]string{"admin": "$2a$10$X4.EHl7wqmH4Gms0eEUxS.L9pHy.l4J6C6WY3SsLx.FNa7eRwXjHW"}, // "password"
+		Users: map[string]string{"admin": adminHash}, // "password"
 		Services: []config.ServiceConfig{
 			{
 				Name:                "test-service",
@@ -291,6 +293,7 @@ func TestHandleLoginPOST_InvalidCredentials(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 	if rr.Code != http.StatusOK {
@@ -307,6 +310,7 @@ func TestHandleLoginPOST_UnknownUser(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 	if rr.Code != http.StatusOK {
@@ -329,6 +333,7 @@ func TestHandleLoginPOST_SuccessfulLogin(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 
@@ -355,6 +360,7 @@ func TestHandleLoginPOST_SHA256Migration(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 
@@ -385,6 +391,7 @@ func TestHandleLoginPOST_AdminDefaultPasswordRedirect(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 
@@ -440,6 +447,7 @@ func TestHandleChangePasswordPOST_PasswordMismatch(t *testing.T) {
 	initTestTemplates(t)
 
 	body := url.Values{
+		"current_password": {"password"},
 		"new_password":     {"newpass123"},
 		"confirm_password": {"different456"},
 	}.Encode()
@@ -457,6 +465,7 @@ func TestHandleChangePasswordPOST_WeakPassword(t *testing.T) {
 	initTestTemplates(t)
 
 	body := url.Values{
+		"current_password": {"password"},
 		"new_password":     {"short"},
 		"confirm_password": {"short"},
 	}.Encode()
@@ -474,6 +483,7 @@ func TestHandleChangePasswordPOST_Success(t *testing.T) {
 	initTestTemplates(t)
 
 	body := url.Values{
+		"current_password": {"password"},
 		"new_password":     {"strongpassword123"},
 		"confirm_password": {"strongpassword123"},
 	}.Encode()

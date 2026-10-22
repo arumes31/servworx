@@ -109,8 +109,12 @@ flowchart TD
 3.  **Access the Web Interface**
     Open your browser and head to: **`http://localhost:7676`**
 
-    *   **Default Username**: `admin`
-    *   **Default Password**: `changeme` (You will be prompted to change this immediately upon your first login).
+    *   **Username**: `admin`
+    *   **Initial Password**: generated randomly on first start and printed once to the container log (`docker logs servworx`). To choose it yourself, set `ADMIN_PASSWORD` (at least 8 characters) before the first start. It is only used when `config.json` does not exist yet.
+    *   Login is only accepted over HTTPS. Put servworx behind a TLS reverse proxy (see [Security Best Practices](#%EF%B8%8F-security-best-practices)).
+
+    > [!NOTE]
+    > Installations created by older versions used the default password `changeme`. If it is still set, servworx forces a password change after login. Change it as soon as possible.
 
 ---
 
@@ -157,7 +161,7 @@ Below is an example of an operational configuration file:
     },
     "services": [
         {
-            "name": "Nginx Web Server",
+            "name": "nginx-web-server",
             "website_url": "https://my-website.local",
             "container_names": "nginx-web,nginx-db",
             "retries": 3,
@@ -179,8 +183,8 @@ Below is an example of an operational configuration file:
 
 | Parameter | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `name` | `string` | *Required* | A unique descriptive label for the monitored service. |
-| `website_url` | `string` | *Required* | The full HTTP/HTTPS URL of the target endpoint to monitor. |
+| `name` | `string` | *Required* | A unique label for the monitored service (letters, digits, `-` and `_` only). |
+| `website_url` | `string` | *Required* | The full HTTP/HTTPS URL of the target endpoint to monitor (only `http://` and `https://` are accepted). |
 | `container_names` | `string` | *Required* | Comma-separated list of Docker container names to restart on failure. |
 | `retries` | `int` | `15` | Number of consecutive failed polling attempts allowed before trigger. |
 | `interval` | `int` | `120` | Polling frequency in seconds between health checks. |
@@ -192,6 +196,14 @@ Below is an example of an operational configuration file:
 | `enable_teams` | `bool` | `false` | Set to `true` to enable Microsoft Teams webhook notification alerts for this service. |
 | `enable_telegram` | `bool` | `false` | Set to `true` to enable Telegram bot notification alerts for this service. |
 | `enable_email` | `bool` | `false` | Set to `true` to enable SMTP Email notification alerts for this service. |
+
+### General Environment Variables
+
+| Variable | Description |
+| :--- | :--- |
+| `ADMIN_PASSWORD` | Initial password for the `admin` account, used only on the first start (when `config.json` is created). If unset, a random password is generated and printed to the log. |
+| `TRUSTED_PROXIES` | Comma-separated IPs or CIDRs of reverse proxies allowed to set `X-Forwarded-Proto` / `X-Forwarded-For`. Default: loopback and private addresses (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1`, `fc00::/7`). Headers from any other client are ignored. |
+| `DOCKER_HOST` | Standard Docker CLI variable. Set it (e.g. `tcp://docker-socket-proxy:2375`) to use a Docker socket proxy instead of mounting `/var/run/docker.sock`. |
 
 ---
 
@@ -245,13 +257,16 @@ Sends standard plain-text e-mail notifications.
 
 Since `servworx` communicates directly with the Docker Engine to perform self-healing container management, it requires access to the host's `/var/run/docker.sock`. Below are crucial configuration measures to ensure a secure setup:
 
-1.  **Change the Default Admin Password Immediately**: Never leave the default password `changeme` active on public-facing servers.
+1.  **Protect the Admin Account**: Use the generated initial password or set a strong `ADMIN_PASSWORD`, and change it after the first login. Changing the password requires the current password and signs out all other sessions. Failed logins are throttled per client IP and per username with an increasing lockout (up to 30 minutes).
 2.  **Restrict Network Access**: 
     *   Do not expose port `7676` directly to the open web.
-    *   Bind it locally (`127.0.0.1:7676:5000`) and put it behind a secure reverse proxy (like Nginx, Traefik, or Caddy) equipped with TLS/SSL.
+    *   Bind it locally (`127.0.0.1:7676:5000`) and put it behind a secure reverse proxy (like Nginx, Traefik, or Caddy) equipped with TLS/SSL. The proxy must send `X-Forwarded-Proto: https`; if it does not connect from a loopback or private address, list it in `TRUSTED_PROXIES`.
+    *   State-changing requests are only accepted from the servworx origin itself (checked with `Sec-Fetch-Site` / `Origin`), so other sites, including other apps on sibling subdomains, cannot submit forms on your behalf.
     *   Alternatively, access the dashboard exclusively via a secure VPN or overlay network (like WireGuard, Tailscale, or OpenVPN).
 3.  **Audit Container Name Inputs**: `servworx` incorporates container name validation patterns to avoid command-injection exploits. Always double-check that you only specify exact, valid Docker container names.
-4.  **Least Privilege Docker Sock (Optional)**: If you want to limit `servworx` permissions, consider using a Docker Socket proxy (e.g. `tecnativa/docker-socket-proxy`) to only permit `POST /containers/{name}/restart` operations and block access to other critical Docker actions.
+4.  **Least Privilege Docker Sock (Recommended)**: The container runs as root with full access to the Docker API, so a compromise of servworx means control of the Docker host. To limit this, run a Docker socket proxy (e.g. `tecnativa/docker-socket-proxy` with `CONTAINERS=1` and `POST=1`, ideally restricted further to container restart and logs), drop the `/var/run/docker.sock` mount and point servworx at the proxy with `DOCKER_HOST=tcp://docker-socket-proxy:2375`.
+5.  **Health Checks Can Reach Internal Hosts**: `website_url` may point at any host the container can reach, including internal services. Only give servworx accounts to people you trust with that network access.
+6.  **Pin the Image Version**: Instead of `:latest`, pin a specific image tag (e.g. `ghcr.io/arumes31/servworx:sha-<commit>`) or digest and update it deliberately.
 
 ---
 
