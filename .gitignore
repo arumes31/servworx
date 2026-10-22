@@ -6,3 +6,4 @@ temp/
 graphify-out/
 
 .claudeignore
+config/initial_admin_password
