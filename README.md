@@ -110,7 +110,7 @@ flowchart TD
     Open your browser and head to: **`http://localhost:7676`**
 
     *   **Username**: `admin`
-    *   **Initial Password**: generated randomly on first start and printed once to the container log (`docker logs servworx`). To choose it yourself, set `ADMIN_PASSWORD` (at least 8 characters) before the first start. It is only used when `config.json` does not exist yet.
+    *   **Initial Password**: generated randomly on first start and written to `./config/initial_admin_password` (inside the container: `/app/config/initial_admin_password`). The file is deleted once you change the password. To choose it yourself, set `ADMIN_PASSWORD` (at least 8 characters) before the first start. It is only used when `config.json` does not exist yet.
     *   Login is only accepted over HTTPS. Put servworx behind a TLS reverse proxy (see [Security Best Practices](#%EF%B8%8F-security-best-practices)).
 
     > [!NOTE]
@@ -201,7 +201,7 @@ Below is an example of an operational configuration file:
 
 | Variable | Description |
 | :--- | :--- |
-| `ADMIN_PASSWORD` | Initial password for the `admin` account, used only on the first start (when `config.json` is created). If unset, a random password is generated and printed to the log. |
+| `ADMIN_PASSWORD` | Initial password for the `admin` account, used only on the first start (when `config.json` is created). If unset, a random password is generated and written to `config/initial_admin_password`. |
 | `TRUSTED_PROXIES` | Comma-separated IPs or CIDRs of reverse proxies allowed to set `X-Forwarded-Proto` / `X-Forwarded-For`. Default: loopback and private addresses (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1`, `fc00::/7`). Headers from any other client are ignored. |
 | `DOCKER_HOST` | Standard Docker CLI variable. Set it (e.g. `tcp://docker-socket-proxy:2375`) to use a Docker socket proxy instead of mounting `/var/run/docker.sock`. |
 

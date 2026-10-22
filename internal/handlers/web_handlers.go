@@ -172,6 +172,9 @@ func HandleChangePasswordPOST(w http.ResponseWriter, r *http.Request) {
 
 	// Sign out all other sessions of this user.
 	auth.DestroyOtherSessions(r, username)
+	if username == "admin" {
+		config.RemoveInitialPasswordFile()
+	}
 
 	monitor.LogAction(username, "Changed password", "user")
 	http.Redirect(w, r, "/config", http.StatusSeeOther)

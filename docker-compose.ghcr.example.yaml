@@ -6,7 +6,7 @@ services:
     ports:
       - "7676:5000"
     environment:
-      # --- Initial admin password (first start only; otherwise a random one is printed to the log) ---
+      # --- Initial admin password (first start only; otherwise a random one is written to ./config/initial_admin_password) ---
       # - ADMIN_PASSWORD=change-this-to-a-long-secret
 
       # --- Reverse proxies allowed to set X-Forwarded-* (default: loopback + private ranges) ---

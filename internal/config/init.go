@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -36,7 +37,7 @@ func initConfig() error {
 	}
 
 	// The initial admin password comes from ADMIN_PASSWORD, or is generated
-	// randomly and printed once to stdout. There is no well-known default.
+	// randomly and written to InitialPasswordFile. There is no well-known default.
 	password, generated, err := initialAdminPassword()
 	if err != nil {
 		return err
@@ -52,13 +53,25 @@ func initConfig() error {
 	}
 
 	if generated {
-		log.Printf("Created initial admin account. Username: admin  Password: %s", password)
-		log.Printf("This password is shown only once. Change it after logging in, or set ADMIN_PASSWORD before the first start.")
+		path := filepath.Join(ConfigDir, InitialPasswordFile)
+		if err := os.WriteFile(path, []byte(password+"\n"), 0600); err != nil {
+			return fmt.Errorf("failed to write initial admin password: %w", err)
+		}
+		log.Printf("Created initial admin account 'admin'. The generated password is stored in %s (removed after the password is changed)", path)
 	} else {
 		log.Printf("Created initial admin account from ADMIN_PASSWORD")
 	}
 
 	return nil
+}
+
+// InitialPasswordFile holds the generated first-run admin password until the
+// admin changes it.
+const InitialPasswordFile = "initial_admin_password"
+
+// RemoveInitialPasswordFile deletes the generated first-run password file.
+func RemoveInitialPasswordFile() {
+	_ = os.Remove(filepath.Join(ConfigDir, InitialPasswordFile))
 }
 
 // initialAdminPassword returns the password for the first-run admin account and

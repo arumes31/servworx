@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
@@ -95,6 +96,19 @@ func TestInitDefaultFiles_GeneratedPassword(t *testing.T) {
 	}
 	if bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte("changeme")) == nil {
 		t.Error("Default admin password must not be the well-known 'changeme'")
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, InitialPasswordFile))
+	if err != nil {
+		t.Fatalf("initial password file not written: %v", err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(cfg.Users["admin"]), []byte(strings.TrimSpace(string(data)))) != nil {
+		t.Error("initial password file does not match the stored hash")
+	}
+
+	RemoveInitialPasswordFile()
+	if _, err := os.Stat(filepath.Join(tmpDir, InitialPasswordFile)); !os.IsNotExist(err) {
+		t.Error("initial password file was not removed")
 	}
 }
 
