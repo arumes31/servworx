@@ -213,3 +213,45 @@ func TestConcurrentSessions(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestCreateSessionPrunesExpired(t *testing.T) {
+	staleID := "stale-id"
+	mutex.Lock()
+	sessions[staleID] = SessionData{Username: "old", ExpiresAt: time.Now().Add(-time.Minute)}
+	mutex.Unlock()
+
+	CreateSession("someone")
+
+	mutex.RLock()
+	_, exists := sessions[staleID]
+	mutex.RUnlock()
+	if exists {
+		t.Error("expired session was not pruned on CreateSession")
+	}
+}
+
+func TestDestroyOtherSessions(t *testing.T) {
+	current := CreateSession("rotator")
+	other := CreateSession("rotator")
+	unrelated := CreateSession("bystander")
+
+	req := httptest.NewRequest("POST", "/change_password", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: current})
+	DestroyOtherSessions(req, "rotator")
+
+	mutex.RLock()
+	_, hasCurrent := sessions[current]
+	_, hasOther := sessions[other]
+	_, hasUnrelated := sessions[unrelated]
+	mutex.RUnlock()
+
+	if !hasCurrent {
+		t.Error("current session should be kept")
+	}
+	if hasOther {
+		t.Error("other session of the same user should be destroyed")
+	}
+	if !hasUnrelated {
+		t.Error("sessions of other users should be kept")
+	}
+}
