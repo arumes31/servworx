@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -46,6 +47,13 @@ func checkPassword(password, storedHash string) bool {
 	}
 	return false
 }
+
+// dummyPasswordHash is compared against when a login names an unknown user, so
+// the response time does not reveal which usernames exist.
+var dummyPasswordHash = sync.OnceValue(func() string {
+	h, _ := bcrypt.GenerateFromPassword([]byte("servworx-dummy-password"), bcrypt.DefaultCost)
+	return string(h)
+})
 
 func migratePasswordToBcrypt(username, password string) {
 	newHash, err := hashPassword(password)
