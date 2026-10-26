@@ -355,3 +355,9 @@ func TestIsQuietHours(t *testing.T) {
 		t.Error("expected empty quiet hours start/end to be inactive")
 	}
 }
+
+func TestHeaderSafe(t *testing.T) {
+	if got := headerSafe("svc\r\nBcc: evil@example.com"); strings.ContainsAny(got, "\r\n") {
+		t.Errorf("headerSafe left CR/LF in %q", got)
+	}
+}

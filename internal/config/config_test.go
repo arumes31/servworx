@@ -31,6 +31,10 @@ func TestIsValidContainerName(t *testing.T) {
 		{"empty name", "", false},
 		{"command injection attempt", "container; rm -rf /", false},
 		{"command injection attempt 2", "container $(whoami)", false},
+		{"leading dash flag", "-t0", false},
+		{"leading dash signal flag", "-sKILL", false},
+		{"leading dot", ".hidden", false},
+		{"leading underscore", "_svc", false},
 	}
 
 	for _, tt := range tests {
@@ -39,6 +43,26 @@ func TestIsValidContainerName(t *testing.T) {
 				t.Errorf("IsValidContainerName(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestIsValidServiceName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"Service1", true},
+		{"my-service_2", true},
+		{"", false},
+		{"with space", false},
+		{"inject\r\nBcc: evil@example.com", false},
+		{"inject\nBcc: evil@example.com", false},
+	}
+
+	for _, tt := range tests {
+		if got := IsValidServiceName(tt.input); got != tt.expected {
+			t.Errorf("IsValidServiceName(%q) = %v, want %v", tt.input, got, tt.expected)
+		}
 	}
 }
 

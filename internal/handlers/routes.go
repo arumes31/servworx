@@ -22,7 +22,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /login", HandleLoginGET)
 	mux.HandleFunc("POST /login", HandleLoginPOST)
-	mux.HandleFunc("GET /logout", requireAuth(HandleLogout))
+	mux.HandleFunc("POST /logout", requireAuth(HandleLogout))
 	mux.HandleFunc("GET /change_password", requireAuth(HandleChangePasswordGET))
 	mux.HandleFunc("POST /change_password", requireAuth(HandleChangePasswordPOST))
 	mux.HandleFunc("GET /config", requireAuth(HandleConfigGET))

@@ -29,6 +29,7 @@ func TestHandleLoginPOST_ConfigLoadError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "127.0.0.1:12345" // trusted local reverse proxy
 	rr := httptest.NewRecorder()
 	HandleLoginPOST(rr, req)
 	// testuser doesn't exist in config, so we get an "Invalid credentials" response
@@ -68,6 +69,7 @@ func TestHandleChangePasswordPOST_EmptyPasswords(t *testing.T) {
 	initTestTemplates(t)
 
 	body := url.Values{
+		"current_password": {"password"},
 		"new_password":     {""},
 		"confirm_password": {""},
 	}.Encode()
