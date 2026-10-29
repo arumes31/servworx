@@ -275,7 +275,6 @@ func TestAlertingRules(t *testing.T) {
 	}
 }
 
-
 func TestCalculateGracePeriod(t *testing.T) {
 	gracePeriod := 60 // 60 seconds
 
@@ -290,7 +289,7 @@ func TestCalculateGracePeriod(t *testing.T) {
 
 	// Test case 2: Recently restarted (lastRestart = now - 30s)
 	now := time.Now().Unix()
-	allowed, remaining = calculateGracePeriod(gracePeriod, now - 30)
+	allowed, remaining = calculateGracePeriod(gracePeriod, now-30)
 	if allowed {
 		t.Errorf("Expected allowed=false when recently restarted")
 	}
@@ -299,7 +298,7 @@ func TestCalculateGracePeriod(t *testing.T) {
 	}
 
 	// Test case 3: Grace period elapsed (lastRestart = now - 90s)
-	allowed, remaining = calculateGracePeriod(gracePeriod, now - 90)
+	allowed, remaining = calculateGracePeriod(gracePeriod, now-90)
 	if !allowed {
 		t.Errorf("Expected allowed=true when grace period elapsed")
 	}

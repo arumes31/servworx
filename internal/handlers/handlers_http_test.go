@@ -93,8 +93,6 @@ func setupTestConfig(t *testing.T) (cleanup func()) {
 // hashPassword
 // ──────────────────────────────────────────────────────────────────────────────
 
-
-
 // ──────────────────────────────────────────────────────────────────────────────
 // migratePasswordToBcrypt
 // ──────────────────────────────────────────────────────────────────────────────
@@ -110,7 +108,7 @@ func TestMigratePasswordToBcrypt(t *testing.T) {
 	})
 
 	// Migrate
-	migratePasswordToBcrypt("admin", "password123")
+	migratePasswordToBcrypt("admin", "password123", sha256Hash)
 
 	// Verify the stored hash is now bcrypt
 	cfg, err := config.LoadConfig()
@@ -123,6 +121,31 @@ func TestMigratePasswordToBcrypt(t *testing.T) {
 	}
 	if !checkPassword("password123", newHash) {
 		t.Error("migrated bcrypt hash does not verify password")
+	}
+}
+
+func TestMigratePasswordToBcrypt_DoesNotOverwriteRotatedPassword(t *testing.T) {
+	cleanup := setupTestConfig(t)
+	defer cleanup()
+
+	legacyHash := "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f" // password123
+	rotated, err := hashPassword("new-secret-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The password was changed after the login verified the legacy hash.
+	_ = config.UpdateConfig(func(c *config.Config) {
+		c.Users["admin"] = rotated
+	})
+
+	migratePasswordToBcrypt("admin", "password123", legacyHash)
+
+	cfg, _ := config.LoadConfig()
+	if cfg.Users["admin"] != rotated {
+		t.Fatal("delayed migration overwrote the rotated password")
+	}
+	if checkPassword("password123", cfg.Users["admin"]) {
+		t.Error("retired password must not be valid after migration")
 	}
 }
 
@@ -1395,8 +1418,6 @@ func TestParseIndex_Invalid(t *testing.T) {
 // ──────────────────────────────────────────────────────────────────────────────
 // InitTemplates
 // ──────────────────────────────────────────────────────────────────────────────
-
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // HandleUpdateServicePOST — negative alert values

@@ -2,9 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func jsonEqual(a, b interface{}) bool {
@@ -400,5 +402,39 @@ func TestUpdateStatusCache(t *testing.T) {
 
 	if loaded.Services[0].Status != "Down" {
 		t.Errorf("UpdateStatus did not update cache/disk correctly, got %s", loaded.Services[0].Status)
+	}
+}
+
+func TestIntervalDuration(t *testing.T) {
+	tests := []struct {
+		interval int
+		want     time.Duration
+	}{
+		{0, DefaultIntervalSeconds * time.Second},
+		{-5, DefaultIntervalSeconds * time.Second},
+		{30, 30 * time.Second},
+		{MaxIntervalSeconds + 1, MaxIntervalSeconds * time.Second},
+		// Large enough to overflow time.Duration when multiplied by time.Second.
+		{math.MaxInt64 / 2, MaxIntervalSeconds * time.Second},
+	}
+	for _, tt := range tests {
+		got := ServiceConfig{Interval: tt.interval}.IntervalDuration()
+		if got != tt.want || got <= 0 {
+			t.Errorf("IntervalDuration(%d) = %v, want %v", tt.interval, got, tt.want)
+		}
+	}
+}
+
+func TestUnmarshalClampsLimits(t *testing.T) {
+	data := `{"name":"svc","interval":9223372036854775807,"retries":99999999,"grace_period":99999999999,"alert_repeat_interval":-5,"alert_max_repeats":99999999}`
+	var svc ServiceConfig
+	if err := json.Unmarshal([]byte(data), &svc); err != nil {
+		t.Fatal(err)
+	}
+	if svc.Interval != MaxIntervalSeconds || svc.Retries != MaxRetries || svc.GracePeriod != MaxGracePeriodSeconds {
+		t.Errorf("limits not clamped: %+v", svc)
+	}
+	if svc.AlertRepeatInterval != 0 || svc.AlertMaxRepeats != MaxAlertRepeats {
+		t.Errorf("alert limits not clamped: %+v", svc)
 	}
 }

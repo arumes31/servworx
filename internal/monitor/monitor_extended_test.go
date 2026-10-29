@@ -1,14 +1,14 @@
 package monitor
 
 import (
-	"strings"
-	"io"
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -474,7 +474,6 @@ func TestUpdateServiceStatusRepeatDownNoRepeatInterval(t *testing.T) {
 	}
 }
 
-
 func TestLogAction(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
@@ -536,5 +535,44 @@ func TestCheckWebsiteGetError(t *testing.T) {
 	}
 	if !strings.Contains(msg, "Website is unreachable") {
 		t.Errorf("expected error message to contain 'Website is unreachable', got: %s", msg)
+	}
+}
+
+func TestSanitizeLogField(t *testing.T) {
+	tests := map[string]string{
+		"admin":                     "admin",
+		"bob\n[2026-01-01] x: fake": `bob\n[2026-01-01] x: fake`,
+		"a\r\nb\tc":                 `a\r\nb\tc`,
+		"\x1b[31mred":               `\x1b[31mred`,
+		"ünïcödé":                   "ünïcödé",
+	}
+	// U+2028 LINE SEPARATOR splits records in some log viewers.
+	tests["line"+string(rune(0x2028))+"sep"] = "line" + string(rune(0x5c)) + "u2028sep"
+	for in, want := range tests {
+		if got := SanitizeLogField(in); got != want {
+			t.Errorf("SanitizeLogField(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestLogAction_EscapesInjectedRecords(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	LogAction("evil\n[2026-01-01 00:00:00] admin: Logged in", "Failed login attempt", "error")
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	if n := strings.Count(output, "\n"); n != 1 {
+		t.Errorf("expected exactly one log line, got %d: %q", n, output)
+	}
+	if !strings.Contains(output, `evil\n[2026-01-01`) {
+		t.Errorf("expected escaped newline in output, got %q", output)
 	}
 }

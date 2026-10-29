@@ -55,16 +55,31 @@ var dummyPasswordHash = sync.OnceValue(func() string {
 	return string(h)
 })
 
-func migratePasswordToBcrypt(username, password string) {
+// migratePasswordToBcrypt replaces the verified legacy hash with a bcrypt hash
+// of the same password. The replacement only happens if the stored hash is
+// still legacyHash, so a password change that committed in the meantime is
+// never overwritten with the old password.
+func migratePasswordToBcrypt(username, password, legacyHash string) {
 	newHash, err := hashPassword(password)
 	if err != nil {
 		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
 		return
 	}
-	_ = config.UpdateConfig(func(cfg *config.Config) {
-		cfg.Users[username] = newHash
+	migrated := false
+	err = config.UpdateConfig(func(cfg *config.Config) {
+		if cfg.Users[username] == legacyHash {
+			cfg.Users[username] = newHash
+			migrated = true
+		}
 	})
-	monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
+	switch {
+	case err != nil:
+		monitor.LogAction("System", fmt.Sprintf("Failed to migrate password for %s: %v", username, err), "error")
+	case !migrated:
+		monitor.LogAction("System", fmt.Sprintf("Skipped password hash migration for user %s: password changed concurrently", username), "system")
+	default:
+		monitor.LogAction("System", fmt.Sprintf("Migrated password hash to bcrypt for user: %s", username), "system")
+	}
 }
 
 func formatDuration(seconds int64) string {

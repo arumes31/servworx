@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/arumes31/servworx/internal/config"
 )
@@ -85,7 +87,50 @@ func LogAction(username, action, logType string) {
 	case "error":
 		color = colorRed
 	}
-	fmt.Printf("%s[%s] %s: %s%s\n", color, timestamp, username, action, colorReset)
+	fmt.Printf("%s[%s] %s: %s%s\n", color, timestamp, SanitizeLogField(username), SanitizeLogField(action), colorReset)
+}
+
+// SanitizeLogField escapes control characters (newlines, carriage returns,
+// terminal escape sequences, Unicode line separators, ...) so that untrusted
+// values such as submitted usernames or remote error messages cannot split a
+// log record or forge additional ones.
+func SanitizeLogField(s string) string {
+	if !strings.ContainsFunc(s, needsLogEscape) {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for _, r := range s {
+		if !needsLogEscape(r) {
+			b.WriteRune(r)
+			continue
+		}
+		switch r {
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if r <= 0xFF {
+				_, _ = fmt.Fprintf(&b, `\x%02x`, r)
+			} else {
+				_, _ = fmt.Fprintf(&b, `\u%04x`, r)
+			}
+		}
+	}
+	return b.String()
+}
+
+func needsLogEscape(r rune) bool {
+	return unicode.IsControl(r) || r == 0x2028 || r == 0x2029 || r == utf8.RuneError // 0x2028/0x2029: Unicode line/paragraph separators
+}
+
+// logServiceLine prints a monitoring message for a service as a single line.
+func logServiceLine(serviceName, format string, args ...any) {
+	fmt.Printf("%s: %s\n", SanitizeLogField(serviceName), SanitizeLogField(fmt.Sprintf(format, args...)))
 }
 
 func checkWebsite(url string, acceptedCodes []int, insecureSkip bool) (bool, string) {
@@ -155,7 +200,7 @@ func restartContainers(containerNames, serviceName string) int64 {
 		// #nosec G204
 		cmd := exec.CommandContext(ctx, "docker", "restart", "--", c)
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("Error restarting %s: %v\n", c, err)
+			fmt.Printf("Error restarting %s: %s\n", c, SanitizeLogField(err.Error()))
 		} else {
 			fmt.Printf("Completed 'docker restart %s'\n", c)
 		}
@@ -341,21 +386,21 @@ func checkWithRetries(svc *config.ServiceConfig) (bool, bool) {
 		}
 		updateServiceStatus(svc.Name, status)
 
-		fmt.Printf("%s: %s\n", svc.Name, message)
+		logServiceLine(svc.Name, "%s", message)
 		if success {
 			return true, false
 		} else if i < svc.Retries {
-			fmt.Printf("%s: Retry %d/%d failed, retrying in %d seconds...\n", svc.Name, i, svc.Retries, svc.Interval)
+			logServiceLine(svc.Name, "Retry %d/%d failed, retrying in %d seconds...", i, svc.Retries, svc.Interval)
 
 			select {
-			case <-time.After(time.Duration(svc.Interval) * time.Second):
+			case <-time.After(svc.IntervalDuration()):
 				// waited
 			case <-stopChan:
 				return false, true
 			}
 		}
 	}
-	fmt.Printf("%s: Max retries (%d) reached.\n", svc.Name, svc.Retries)
+	logServiceLine(svc.Name, "Max retries (%d) reached.", svc.Retries)
 	return false, false
 }
 
@@ -365,7 +410,7 @@ func handleServiceFailure(svc *config.ServiceConfig, restartAllowed bool, remain
 		writeLastRestart(svc.Name, newRestart)
 		return newRestart
 	} else {
-		fmt.Printf("%s: Restart not allowed yet. Remaining grace period: %d seconds.\n", svc.Name, remainingGrace)
+		logServiceLine(svc.Name, "Restart not allowed yet. Remaining grace period: %d seconds.", remainingGrace)
 		LogAction("System", fmt.Sprintf("Service %s: Restart not allowed, remaining grace period: %d seconds", svc.Name, remainingGrace), "error")
 		return lastRestart
 	}
@@ -416,11 +461,7 @@ func monitorService(svc config.ServiceConfig) {
 
 	lastRestart := readLastRestart(svc.Name)
 
-	interval := svc.Interval
-	if interval <= 0 {
-		interval = 60
-	}
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	ticker := time.NewTicker(svc.IntervalDuration())
 	defer ticker.Stop()
 
 	for {

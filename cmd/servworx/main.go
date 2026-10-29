@@ -32,6 +32,10 @@ func main() {
 		Addr:              "0.0.0.0:5000",
 		Handler:           handlers.Protect(mux),
 		ReadHeaderTimeout: 3 * time.Second,
+		// Bounds how long a client may take to send a request body. The live
+		// log stream clears this deadline for its long-lived connection.
+		ReadTimeout: 30 * time.Second,
+		IdleTimeout: 120 * time.Second,
 	}
 
 	// 4. Start Background Monitor
