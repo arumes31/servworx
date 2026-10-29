@@ -249,6 +249,33 @@ func TestHandleUpdateServicePOST_NegativeInterval(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateServicePOST_IntervalOverflowRejected(t *testing.T) {
+	cleanup := setupTestConfig(t)
+	defer cleanup()
+	initTestTemplates(t)
+
+	before, _ := config.LoadConfig()
+	body := url.Values{
+		"form_action":  {"update"},
+		"name":         {"svc"},
+		"website_url":  {"https://example.com"},
+		"retries":      {"3"},
+		"interval":     {"9223372036854775807"}, // overflows time.Duration
+		"grace_period": {"3600"},
+	}.Encode()
+	req := makeAuthenticatedRequest(t, "POST", "/update_service/0", body, "admin")
+	req.SetPathValue("index", "0")
+	rr := httptest.NewRecorder()
+	HandleUpdateServicePOST(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 with validation error, got %d", rr.Code)
+	}
+	after, _ := config.LoadConfig()
+	if after.Services[0].Interval != before.Services[0].Interval {
+		t.Errorf("out-of-range interval was saved: %d", after.Services[0].Interval)
+	}
+}
+
 // TestHandleUpdateServicePOST_QuietHours covers quiet hours fields being set
 func TestHandleUpdateServicePOST_QuietHours(t *testing.T) {
 	cleanup := setupTestConfig(t)

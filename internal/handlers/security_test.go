@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -71,6 +72,7 @@ func TestHandleAPILogsStreamGET_Security(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/logs/stream/"+tt.index, nil)
 			// Mocking path value since it's used in parseIndex (mux.HandleFunc("GET /api/logs/stream/{index}"...))
 			req.SetPathValue("index", tt.index)
+			req.AddCookie(&http.Cookie{Name: "session_id", Value: auth.CreateSession("admin")})
 
 			rr := httptest.NewRecorder()
 
@@ -140,28 +142,58 @@ func TestHandleViewLogsGET_Security(t *testing.T) {
 	}
 }
 
+// withTrustedProxies overrides the TRUSTED_PROXIES setting for one test.
+func withTrustedProxies(t *testing.T, raw string) {
+	t.Helper()
+	prev := trustedProxies
+	prefixes := parseTrustedProxies(raw)
+	trustedProxies = func() []netip.Prefix { return prefixes }
+	t.Cleanup(func() { trustedProxies = prev })
+}
+
 func TestIsSecureRequest_TrustedProxyOnly(t *testing.T) {
 	tests := []struct {
-		remote string
-		want   bool
+		proxies string
+		remote  string
+		want    bool
 	}{
-		{"127.0.0.1:1234", true},
-		{"172.18.0.5:1234", true},
-		{"[::1]:1234", true},
-		{"203.0.113.7:1234", false},
+		{"loopback", "127.0.0.1:1234", true},
+		{"loopback", "[::1]:1234", true},
+		// Private peers are no longer trusted implicitly.
+		{"loopback", "172.18.0.5:1234", false},
+		{"loopback", "192.168.1.20:1234", false},
+		{"loopback", "203.0.113.7:1234", false},
+		{"172.18.0.0/16", "172.18.0.5:1234", true},
+		{"172.18.0.0/16", "127.0.0.1:1234", false},
+		{"private", "192.168.1.20:1234", true},
+		{"private", "203.0.113.7:1234", false},
+		// An invalid entry fails closed, even for otherwise listed peers.
+		{"172.18.0.0/16, bogus", "172.18.0.5:1234", false},
+		{"bogus", "127.0.0.1:1234", false},
 	}
 	for _, tt := range tests {
+		withTrustedProxies(t, tt.proxies)
 		req := httptest.NewRequest("POST", "/login", nil)
 		req.RemoteAddr = tt.remote
 		req.Header.Set("X-Forwarded-Proto", "https")
 		if got := isSecureRequest(req); got != tt.want {
-			t.Errorf("isSecureRequest(remote=%s) = %v, want %v", tt.remote, got, tt.want)
+			t.Errorf("isSecureRequest(proxies=%q, remote=%s) = %v, want %v", tt.proxies, tt.remote, got, tt.want)
 		}
 	}
 }
 
+func TestHandleAPILogsStreamGET_RequiresSession(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/logs/stream/0", nil)
+	req.SetPathValue("index", "0")
+	rr := httptest.NewRecorder()
+	HandleAPILogsStreamGET(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 without a session, got %d", rr.Code)
+	}
+}
+
 func TestParseTrustedProxies(t *testing.T) {
-	prefixes := parseTrustedProxies("10.0.0.0/8, 192.0.2.10, bogus")
+	prefixes := parseTrustedProxies("10.0.0.0/8, 192.0.2.10")
 	if len(prefixes) != 2 {
 		t.Fatalf("expected 2 prefixes, got %v", prefixes)
 	}
@@ -173,9 +205,20 @@ func TestParseTrustedProxies(t *testing.T) {
 	if isTrustedAddr(b, prefixes) {
 		t.Error("private address should not be trusted when TRUSTED_PROXIES is set")
 	}
+
+	if got := parseTrustedProxies("10.0.0.0/8, bogus"); got != nil {
+		t.Errorf("invalid entry must fail closed, got %v", got)
+	}
+	if got := parseTrustedProxies("LOOPBACK"); len(got) != 2 {
+		t.Errorf("loopback keyword should expand to 2 prefixes, got %v", got)
+	}
+	if isTrustedAddr(a, nil) {
+		t.Error("an empty trust list must not trust any address")
+	}
 }
 
 func TestClientIP(t *testing.T) {
+	withTrustedProxies(t, "172.18.0.0/16, 10.0.0.0/8")
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "203.0.113.7:1234"
 	req.Header.Set("X-Forwarded-For", "198.51.100.1")
@@ -187,6 +230,14 @@ func TestClientIP(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "198.51.100.99, 198.51.100.1, 10.0.0.3")
 	if got := clientIP(req); got != "198.51.100.1" {
 		t.Errorf("trusted peer: got %s, want rightmost untrusted hop", got)
+	}
+
+	// A private peer that is not a configured proxy cannot choose its
+	// throttling key through X-Forwarded-For.
+	req.RemoteAddr = "192.168.1.50:1234"
+	req.Header.Set("X-Forwarded-For", "198.51.100.77")
+	if got := clientIP(req); got != "192.168.1.50" {
+		t.Errorf("unlisted private peer: got %s, want its own address", got)
 	}
 }
 

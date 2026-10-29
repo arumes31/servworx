@@ -7,6 +7,18 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
+)
+
+// Limits for numeric service settings. They keep every value far inside the
+// range of time.Duration so conversions to durations can never overflow.
+const (
+	DefaultIntervalSeconds     = 60
+	MaxIntervalSeconds         = 7 * 24 * 3600   // one week
+	MaxRetries                 = 1000            //
+	MaxGracePeriodSeconds      = 365 * 24 * 3600 // one year
+	MaxAlertRepeatIntervalSecs = 30 * 24 * 3600  // 30 days
+	MaxAlertRepeats            = 10000           //
 )
 
 var (
@@ -107,7 +119,28 @@ func (s *ServiceConfig) UnmarshalJSON(data []byte) error {
 	} else {
 		s.AlertOnRestart = *aux.AlertOnRestart
 	}
+	s.clampLimits()
 	return nil
+}
+
+// clampLimits caps out-of-range values from hand-edited or older config files
+// so they cannot overflow when converted to durations.
+func (s *ServiceConfig) clampLimits() {
+	s.Interval = min(s.Interval, MaxIntervalSeconds)
+	s.Retries = min(s.Retries, MaxRetries)
+	s.GracePeriod = min(s.GracePeriod, MaxGracePeriodSeconds)
+	s.AlertRepeatInterval = max(min(s.AlertRepeatInterval, MaxAlertRepeatIntervalSecs), 0)
+	s.AlertMaxRepeats = max(min(s.AlertMaxRepeats, MaxAlertRepeats), 0)
+}
+
+// IntervalDuration returns the check interval as a positive duration. Values
+// outside 1..MaxIntervalSeconds fall back to the default or are capped.
+func (s ServiceConfig) IntervalDuration() time.Duration {
+	interval := s.Interval
+	if interval <= 0 {
+		interval = DefaultIntervalSeconds
+	}
+	return time.Duration(min(interval, MaxIntervalSeconds)) * time.Second
 }
 
 type Status struct {

@@ -12,19 +12,38 @@ import (
 )
 
 // trustedProxies returns the networks that may set X-Forwarded-* headers.
-// It is configured with TRUSTED_PROXIES (comma separated IPs or CIDRs). When
-// unset, loopback and private (RFC 1918 / RFC 4193) addresses are trusted,
-// which covers a reverse proxy on the same host or Docker network while
-// ignoring spoofed headers from clients on the public internet.
+// It is configured with TRUSTED_PROXIES (comma separated IPs, CIDRs or the
+// keywords "loopback" and "private"). When unset, only loopback peers are
+// trusted: a reverse proxy on a Docker network or another host must be listed
+// explicitly, so clients that can reach the port directly cannot spoof their
+// address or the request scheme. Any invalid entry makes the whole setting
+// fail closed (no proxy is trusted).
 var trustedProxies = sync.OnceValue(func() []netip.Prefix {
-	return parseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
+	raw, set := os.LookupEnv("TRUSTED_PROXIES")
+	if !set || strings.TrimSpace(raw) == "" {
+		raw = "loopback"
+	}
+	return parseTrustedProxies(raw)
 })
 
+var proxyKeywords = map[string][]string{
+	"loopback": {"127.0.0.0/8", "::1/128"},
+	"private":  {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"},
+}
+
+// parseTrustedProxies parses a TRUSTED_PROXIES value. It returns nil if any
+// entry is invalid, so a typo never widens trust.
 func parseTrustedProxies(raw string) []netip.Prefix {
 	var prefixes []netip.Prefix
 	for _, entry := range strings.Split(raw, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
+			continue
+		}
+		if cidrs, ok := proxyKeywords[strings.ToLower(entry)]; ok {
+			for _, c := range cidrs {
+				prefixes = append(prefixes, netip.MustParsePrefix(c))
+			}
 			continue
 		}
 		if p, err := netip.ParsePrefix(entry); err == nil {
@@ -37,7 +56,8 @@ func parseTrustedProxies(raw string) []netip.Prefix {
 			continue
 		}
 		// #nosec G706 -- operator-supplied env value, quoted with %q
-		log.Printf("Ignoring invalid TRUSTED_PROXIES entry: %q", entry)
+		log.Printf("Invalid TRUSTED_PROXIES entry %q: ignoring X-Forwarded-* headers from all peers until it is fixed", entry)
+		return nil
 	}
 	return prefixes
 }
@@ -54,9 +74,6 @@ func parseIP(s string) (netip.Addr, bool) {
 }
 
 func isTrustedAddr(a netip.Addr, prefixes []netip.Prefix) bool {
-	if len(prefixes) == 0 {
-		return a.IsLoopback() || a.IsPrivate()
-	}
 	for _, p := range prefixes {
 		if p.Contains(a) {
 			return true
@@ -70,13 +87,26 @@ func isTrustedProxy(remoteAddr string) bool {
 	return ok && isTrustedAddr(a, trustedProxies())
 }
 
+var untrustedProxyHint sync.Once
+
 // isSecureRequest reports whether the request reached us over HTTPS, either
 // directly or through a trusted reverse proxy.
 func isSecureRequest(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return isTrustedProxy(r.RemoteAddr) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	https := strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	if !https {
+		return false
+	}
+	if isTrustedProxy(r.RemoteAddr) {
+		return true
+	}
+	untrustedProxyHint.Do(func() {
+		// #nosec G706 -- peer address is parsed by net/http, quoted with %q
+		log.Printf("Ignoring X-Forwarded-Proto from untrusted peer %q; if this is your reverse proxy, add it to TRUSTED_PROXIES", r.RemoteAddr)
+	})
+	return false
 }
 
 // clientIP returns the address of the client, honouring X-Forwarded-For only

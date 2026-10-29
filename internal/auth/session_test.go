@@ -3,8 +3,8 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
-	"testing"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -253,5 +253,76 @@ func TestDestroyOtherSessions(t *testing.T) {
 	}
 	if !hasUnrelated {
 		t.Error("sessions of other users should be kept")
+	}
+}
+
+func sessionRequest(id string) *http.Request {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
+	return req
+}
+
+func assertDone(t *testing.T, ctx interface{ Done() <-chan struct{} }, what string) {
+	t.Helper()
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Errorf("session context not cancelled after %s", what)
+	}
+}
+
+func TestSessionContext_CancelledOnLogout(t *testing.T) {
+	id := CreateSession("streamer")
+	ctx, ok := SessionContext(sessionRequest(id))
+	if !ok {
+		t.Fatal("expected a session context")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("context of a live session must not be cancelled")
+	}
+	DestroySession(httptest.NewRecorder(), sessionRequest(id))
+	assertDone(t, ctx, "logout")
+}
+
+func TestSessionContext_CancelledOnRevocation(t *testing.T) {
+	current := CreateSession("revoked")
+	other := CreateSession("revoked")
+	ctx, ok := SessionContext(sessionRequest(other))
+	if !ok {
+		t.Fatal("expected a session context")
+	}
+	DestroyOtherSessions(sessionRequest(current), "revoked")
+	assertDone(t, ctx, "password-change revocation")
+
+	if _, ok := SessionContext(sessionRequest(other)); ok {
+		t.Error("revoked session must not yield a context")
+	}
+}
+
+func TestSessionContext_ExpiresWithSession(t *testing.T) {
+	id := "legacy-injected"
+	mutex.Lock()
+	sessions[id] = SessionData{Username: "short", ExpiresAt: time.Now().Add(50 * time.Millisecond)}
+	mutex.Unlock()
+
+	ctx, ok := SessionContext(sessionRequest(id))
+	if !ok {
+		t.Fatal("expected a session context")
+	}
+	assertDone(t, ctx, "expiry")
+}
+
+func TestCreateSessionIfCurrent_RejectsAfterPasswordChange(t *testing.T) {
+	gen := CredentialGeneration("racer")
+	keeper := CreateSession("racer")
+
+	// A password change commits while the login is still verifying.
+	DestroyOtherSessions(sessionRequest(keeper), "racer")
+
+	if id, ok := CreateSessionIfCurrent("racer", gen); ok || id != "" {
+		t.Fatal("login that verified a retired password must not create a session")
+	}
+	if _, ok := CreateSessionIfCurrent("racer", CredentialGeneration("racer")); !ok {
+		t.Error("login with the current generation should succeed")
 	}
 }

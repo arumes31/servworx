@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -68,6 +69,11 @@ func HandleAPIStatusGET(w http.ResponseWriter, r *http.Request) {
 
 func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.GetSession(r)
+	sessionCtx, ok := auth.SessionContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	idx, ok := parseIndex(w, r)
 	if !ok {
 		return
@@ -111,8 +117,16 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The stream outlives the server read timeout, and must end as soon as the
+	// client disconnects or the session expires, is logged out or revoked.
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	stopAfter := context.AfterFunc(sessionCtx, cancel)
+	defer stopAfter()
+
 	// #nosec G204 G702
-	cmd := exec.CommandContext(r.Context(), "docker", "logs", "-f", "--tail", "50", "--", targetContainer)
+	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", "--tail", "50", "--", targetContainer)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		_, _ = fmt.Fprintf(w, "data: Error getting logs pipe\n\n")
@@ -131,6 +145,9 @@ func HandleAPILogsStreamGET(w http.ResponseWriter, r *http.Request) {
 	buf := make([]byte, 1024)
 	for {
 		n, err := stdoutPipe.Read(buf)
+		if ctx.Err() != nil {
+			break
+		}
 		if n > 0 {
 			lines := strings.Split(string(buf[:n]), "\n")
 			for _, line := range lines {

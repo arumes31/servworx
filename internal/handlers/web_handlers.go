@@ -63,6 +63,9 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the credential generation before the password hash, so a password
+	// change that commits while this login is verifying is detected below.
+	generation := auth.CredentialGeneration(username)
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "System error loading config"})
@@ -86,16 +89,22 @@ func HandleLoginPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipLoginLimiter.reset(ipKey)
-	userLoginLimiter.reset(username)
-
 	// Auto-migrate legacy SHA256 hash to bcrypt on successful login
 	if !strings.HasPrefix(storedHash, "$2") {
-		migratePasswordToBcrypt(username, password)
+		migratePasswordToBcrypt(username, password, storedHash)
+	}
+
+	sessionID, ok := auth.CreateSessionIfCurrent(username, generation)
+	if !ok {
+		// The password was changed while this login was being verified.
+		monitor.LogAction(username, fmt.Sprintf("Login rejected: credentials changed during verification (client %s)", ipKey), "error")
+		_ = templates.ExecuteTemplate(w, "login.html", map[string]string{"error": "Invalid credentials"})
+		return
 	}
 
 	// Login successful
-	sessionID := auth.CreateSession(username)
+	ipLoginLimiter.reset(ipKey)
+	userLoginLimiter.reset(username)
 	auth.SetSessionCookie(w, sessionID)
 	monitor.LogAction(username, "Logged in", "user")
 
@@ -238,6 +247,12 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 		renderConfigWithError(w, "Retries, interval, and grace period must be positive integers")
 		return
 	}
+	if retries > config.MaxRetries || interval > config.MaxIntervalSeconds || gracePeriod > config.MaxGracePeriodSeconds {
+		monitor.LogAction(username, "Out-of-range numeric inputs for service", "error")
+		renderConfigWithError(w, fmt.Sprintf("Retries may be at most %d, interval at most %d seconds and grace period at most %d seconds",
+			config.MaxRetries, config.MaxIntervalSeconds, config.MaxGracePeriodSeconds))
+		return
+	}
 
 	codes, err := parseStatusCodes(r.FormValue("accepted_status_codes"))
 	if err != nil {
@@ -287,16 +302,13 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, username string
 	quietHoursStart := r.FormValue("quiet_hours_start")
 	quietHoursEnd := r.FormValue("quiet_hours_end")
 
+	// Clamp before multiplying so huge inputs cannot overflow.
 	repeatIntervalMin, _ := strconv.Atoi(r.FormValue("alert_repeat_interval"))
+	repeatIntervalMin = max(min(repeatIntervalMin, config.MaxAlertRepeatIntervalSecs/60), 0)
 	alertRepeatInterval := repeatIntervalMin * 60
-	if alertRepeatInterval < 0 {
-		alertRepeatInterval = 0
-	}
 
 	alertMaxRepeats, _ := strconv.Atoi(r.FormValue("alert_max_repeats"))
-	if alertMaxRepeats < 0 {
-		alertMaxRepeats = 0
-	}
+	alertMaxRepeats = max(min(alertMaxRepeats, config.MaxAlertRepeats), 0)
 
 	_ = config.UpdateConfig(func(c *config.Config) {
 		c.Services[idx].Name = newName
