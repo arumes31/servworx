@@ -202,7 +202,7 @@ Below is an example of an operational configuration file:
 | Variable | Description |
 | :--- | :--- |
 | `ADMIN_PASSWORD` | Initial password for the `admin` account, used only on the first start (when `config.json` is created). If unset, a random password is generated and written to `config/initial_admin_password`. |
-| `TRUSTED_PROXIES` | Comma-separated IPs or CIDRs of reverse proxies allowed to set `X-Forwarded-Proto` / `X-Forwarded-For`. The keywords `loopback` and `private` (RFC 1918 / RFC 4193 ranges) may be used too. Default: `loopback` only. A reverse proxy on a Docker network or another host must be listed explicitly. Headers from any other client are ignored, and an invalid entry disables forwarded headers entirely (fail closed). |
+| `TRUSTED_PROXIES` | Comma-separated IPs or CIDRs of reverse proxies allowed to set `X-Forwarded-Proto` / `X-Forwarded-For`. The keywords `loopback` and `private` (RFC 1918 / RFC 4193 ranges) may be used too. Default: `loopback, private` (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1`, `fc00::/7`). Narrow it if untrusted clients can reach the port from a private network. Headers from any other client are ignored, and an invalid entry disables forwarded headers entirely (fail closed). |
 | `DOCKER_HOST` | Standard Docker CLI variable. Set it (e.g. `tcp://docker-socket-proxy:2375`) to use a Docker socket proxy instead of mounting `/var/run/docker.sock`. |
 
 ---
@@ -260,7 +260,7 @@ Since `servworx` communicates directly with the Docker Engine to perform self-he
 1.  **Protect the Admin Account**: Use the generated initial password or set a strong `ADMIN_PASSWORD`, and change it after the first login. Changing the password requires the current password and signs out all other sessions. Failed logins are throttled per client IP and per username with an increasing lockout (up to 30 minutes).
 2.  **Restrict Network Access**: 
     *   Do not expose port `7676` directly to the open web.
-    *   Bind it locally (`127.0.0.1:7676:5000`) and put it behind a secure reverse proxy (like Nginx, Traefik, or Caddy) equipped with TLS/SSL. The proxy must send `X-Forwarded-Proto: https`; unless it connects over loopback, list its address or network in `TRUSTED_PROXIES` (e.g. `TRUSTED_PROXIES=172.18.0.0/16` for a proxy on the same Docker network).
+    *   Bind it locally (`127.0.0.1:7676:5000`) and put it behind a secure reverse proxy (like Nginx, Traefik, or Caddy) equipped with TLS/SSL. The proxy must send `X-Forwarded-Proto: https`; if it does not connect from a loopback or private address, list it in `TRUSTED_PROXIES` (setting it, e.g. `TRUSTED_PROXIES=172.18.0.0/16`, also stops other private clients from spoofing these headers).
     *   State-changing requests are only accepted from the servworx origin itself (checked with `Sec-Fetch-Site` / `Origin`), so other sites, including other apps on sibling subdomains, cannot submit forms on your behalf.
     *   Alternatively, access the dashboard exclusively via a secure VPN or overlay network (like WireGuard, Tailscale, or OpenVPN).
 3.  **Audit Container Name Inputs**: `servworx` incorporates container name validation patterns to avoid command-injection exploits. Always double-check that you only specify exact, valid Docker container names.

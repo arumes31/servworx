@@ -13,18 +13,21 @@ import (
 
 // trustedProxies returns the networks that may set X-Forwarded-* headers.
 // It is configured with TRUSTED_PROXIES (comma separated IPs, CIDRs or the
-// keywords "loopback" and "private"). When unset, only loopback peers are
-// trusted: a reverse proxy on a Docker network or another host must be listed
-// explicitly, so clients that can reach the port directly cannot spoof their
-// address or the request scheme. Any invalid entry makes the whole setting
-// fail closed (no proxy is trusted).
+// keywords "loopback" and "private"). When unset, loopback and private
+// (RFC 1918 / RFC 4193) peers are trusted, which covers a reverse proxy on the
+// same host or Docker network while ignoring spoofed headers from clients on
+// the public internet. Set it explicitly if untrusted clients can reach the
+// port from a private network. Any invalid entry makes the whole setting fail
+// closed (no proxy is trusted).
 var trustedProxies = sync.OnceValue(func() []netip.Prefix {
 	raw, set := os.LookupEnv("TRUSTED_PROXIES")
 	if !set || strings.TrimSpace(raw) == "" {
-		raw = "loopback"
+		raw = defaultTrustedProxies
 	}
 	return parseTrustedProxies(raw)
 })
+
+const defaultTrustedProxies = "loopback, private"
 
 var proxyKeywords = map[string][]string{
 	"loopback": {"127.0.0.0/8", "::1/128"},

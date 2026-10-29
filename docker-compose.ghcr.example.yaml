@@ -9,7 +9,7 @@ services:
       # --- Initial admin password (first start only; otherwise a random one is written to ./config/initial_admin_password) ---
       # - ADMIN_PASSWORD=change-this-to-a-long-secret
 
-      # --- Reverse proxies allowed to set X-Forwarded-* (default: loopback only; required for a proxy on a Docker network) ---
+      # --- Reverse proxies allowed to set X-Forwarded-* (default: loopback + private ranges) ---
       # - TRUSTED_PROXIES=172.18.0.0/16
 
       # --- Use a Docker socket proxy instead of mounting /var/run/docker.sock ---
