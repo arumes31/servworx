@@ -159,7 +159,7 @@ func TestIsSecureRequest_TrustedProxyOnly(t *testing.T) {
 	}{
 		{"loopback", "127.0.0.1:1234", true},
 		{"loopback", "[::1]:1234", true},
-		// Private peers are no longer trusted implicitly.
+		// Private peers are not trusted when only loopback is configured.
 		{"loopback", "172.18.0.5:1234", false},
 		{"loopback", "192.168.1.20:1234", false},
 		{"loopback", "203.0.113.7:1234", false},
@@ -189,6 +189,22 @@ func TestHandleAPILogsStreamGET_RequiresSession(t *testing.T) {
 	HandleAPILogsStreamGET(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 without a session, got %d", rr.Code)
+	}
+}
+
+func TestDefaultTrustedProxies(t *testing.T) {
+	prefixes := parseTrustedProxies(defaultTrustedProxies)
+	for _, remote := range []string{"127.0.0.1", "::1", "10.1.2.3", "172.18.0.5", "192.168.1.20", "fd00::1"} {
+		a, _ := parseIP(remote)
+		if !isTrustedAddr(a, prefixes) {
+			t.Errorf("%s should be trusted by default", remote)
+		}
+	}
+	for _, remote := range []string{"203.0.113.7", "8.8.8.8", "2001:db8::1"} {
+		a, _ := parseIP(remote)
+		if isTrustedAddr(a, prefixes) {
+			t.Errorf("%s must not be trusted by default", remote)
+		}
 	}
 }
 
