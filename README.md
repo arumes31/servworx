@@ -6,7 +6,7 @@
 
 ![Build and Publish Docker Image](https://github.com/arumes31/servworx/actions/workflows/docker-publish.yml/badge.svg)
 ![Daily Security Scan](https://github.com/arumes31/servworx/actions/workflows/security-scan.yml/badge.svg)
-![Go Version](https://img.shields.io/badge/Go-1.26.1+-00ADD8.svg?style=flat-square&logo=go&logoColor=white)
+![Go Version](https://img.shields.io/badge/Go-1.26.10+-00ADD8.svg?style=flat-square&logo=go&logoColor=white)
 ![Docker Image Size](https://img.shields.io/docker/image-size/arumes31/servworx/latest?style=flat-square&logo=docker&logoColor=white&color=2496ED)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)
 ![Repo Size](https://img.shields.io/github/repo-size/arumes31/servworx?style=flat-square)
@@ -91,6 +91,7 @@ flowchart TD
 
 *   [Docker](https://docs.docker.com/get-docker/) installed and running.
 *   [Docker Compose](https://docs.docker.com/compose/install/) installed.
+*   [Go](https://golang.org/) 1.26.10+ (if compiling locally; container build uses Go 1.27.3).
 
 ### Installation & Setup
 
@@ -173,7 +174,18 @@ Below is an example of an operational configuration file:
             "enable_webhook": false,
             "enable_teams": true,
             "enable_telegram": false,
-            "enable_email": true
+            "enable_email": true,
+            "enable_discord": false,
+            "enable_gotify": false,
+            "enable_pushover": false,
+            "alert_on_failure": true,
+            "alert_on_recovery": true,
+            "alert_on_restart": true,
+            "alert_repeat_interval": 0,
+            "alert_max_repeats": 0,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+            "alert_snooze_until": 0
         }
     ]
 }
@@ -196,6 +208,17 @@ Below is an example of an operational configuration file:
 | `enable_teams` | `bool` | `false` | Set to `true` to enable Microsoft Teams webhook notification alerts for this service. |
 | `enable_telegram` | `bool` | `false` | Set to `true` to enable Telegram bot notification alerts for this service. |
 | `enable_email` | `bool` | `false` | Set to `true` to enable SMTP Email notification alerts for this service. |
+| `enable_discord` | `bool` | `false` | Set to `true` to enable Discord webhook notification alerts for this service. |
+| `enable_gotify` | `bool` | `false` | Set to `true` to enable Gotify notification alerts for this service. |
+| `enable_pushover` | `bool` | `false` | Set to `true` to enable Pushover notification alerts for this service. |
+| `alert_on_failure` | `bool` | `true` | Send notification when service state changes to Down. |
+| `alert_on_recovery` | `bool` | `true` | Send notification when service recovers to Up. |
+| `alert_on_restart` | `bool` | `true` | Send notification when a container restart is triggered. |
+| `alert_repeat_interval` | `int` | `0` | Interval in seconds to repeat alerts while a service remains down (0 to disable repeat). |
+| `alert_max_repeats` | `int` | `0` | Maximum number of repeat alerts to send for a single downtime event (0 for unlimited). |
+| `quiet_hours_start` | `string` | `""` | Start time (`HH:MM`, 24h format) for quiet hours suppressing non-recovery alerts. |
+| `quiet_hours_end` | `string` | `""` | End time (`HH:MM`, 24h format) for quiet hours suppressing non-recovery alerts. |
+| `alert_snooze_until` | `int64` | `0` | Unix timestamp until which non-recovery alerts for this service are snoozed. |
 
 ### General Environment Variables
 
@@ -209,7 +232,7 @@ Below is an example of an operational configuration file:
 
 ### 🔔 Notification Setup
 
-`servworx` supports optional, multi-channel notifications (Generic Webhooks, MS Teams, Telegram, and SMTP Email) to alert you whenever a service's state changes (e.g., from `Up` to `Down`, or `Down` to `Up`) or when a container restart is triggered.
+`servworx` supports optional, multi-channel notifications (Generic Webhooks, MS Teams, Telegram, SMTP Email, Discord, Gotify, and Pushover) to alert you whenever a service's state changes (e.g., from `Up` to `Down`, or `Down` to `Up`) or when a container restart is triggered.
 
 Global notification settings (such as API tokens, endpoints, and credentials) are configured securely using **Docker container environment variables**. Once configured, each monitored service can selectively toggle channels on or off directly from the sleek settings panel on the web dashboard.
 
@@ -240,6 +263,7 @@ Sends beautifully formatted Markdown alerts directly to a specified personal cha
 * **Environment Variables**:
   * `NOTIFICATION_TELEGRAM_TOKEN`: The API token obtained from [@BotFather](https://t.me/BotFather).
   * `NOTIFICATION_TELEGRAM_CHAT_ID`: The unique target chat or channel ID.
+  * `NOTIFICATION_TELEGRAM_BASE_URL`: (Optional) Custom Telegram Bot API base URL (defaults to `https://api.telegram.org` if unset).
 
 #### 4. SMTP Email (`enable_email`)
 Sends standard plain-text e-mail notifications.
@@ -250,6 +274,36 @@ Sends standard plain-text e-mail notifications.
   * `NOTIFICATION_SMTP_PASS`: The password or app token for the SMTP server.
   * `NOTIFICATION_SMTP_FROM`: The sender email address.
   * `NOTIFICATION_SMTP_TO`: The destination email address.
+
+#### 5. Discord (`enable_discord`)
+Sends rich embed webhook messages directly to a designated Discord channel.
+* **Environment Variable**: `NOTIFICATION_DISCORD_URL` (Discord Webhook URL).
+* **Features**: Formatted embed cards with dynamic color highlights (red for outages/restarts, green for recovery) and detailed status descriptions.
+
+#### 6. Gotify (`enable_gotify`)
+Pushes real-time alerts to a self-hosted Gotify notification server.
+* **Environment Variables**:
+  * `NOTIFICATION_GOTIFY_URL`: Base URL of your Gotify instance (e.g., `https://gotify.example.local`).
+  * `NOTIFICATION_GOTIFY_TOKEN`: Application token generated in Gotify.
+
+#### 7. Pushover (`enable_pushover`)
+Delivers push notifications to Android, iOS, and desktop devices via Pushover.
+* **Environment Variables**:
+  * `NOTIFICATION_PUSHOVER_TOKEN`: Pushover API token / application key.
+  * `NOTIFICATION_PUSHOVER_USER`: Pushover user key or group key.
+
+---
+
+### 🌐 API Endpoints
+
+In addition to the interactive web portal, `servworx` provides JSON and AJAX endpoints:
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/status` | Returns the real-time status and metrics of all configured services. |
+| `GET` | `/api/logs/stream/{index}` | Server-Sent Events (SSE) stream for live Docker container logs of service `{index}`. |
+| `POST` | `/api/notifications/test` | Dispatches a test notification across enabled notification channels. |
+| `POST` | `/api/snooze/{index}` | Snoozes non-recovery alerts for service `{index}`. Accepts form parameter `duration` (in minutes; pass `0` to clear snooze). |
 
 ---
 

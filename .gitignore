@@ -7,3 +7,8 @@ graphify-out/
 
 .claudeignore
 config/initial_admin_password
+
+docs/
+.stfolder/
+.stignore
+.kimi-code/
