@@ -1,21 +1,18 @@
 name: Security and Quality Scan
 
+# Called by docker-publish.yml for PRs, pushes to main and releases, so the
+# checks run once per commit instead of push + pull_request + publish gate.
 on:
-  push:
-    branches: [ "**" ]
-  pull_request:
-    branches: [ "**" ]
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   security-and-quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       security-events: write
