@@ -39,6 +39,9 @@ func TestSendersRedactCredentialURLs(t *testing.T) {
 			if strings.Contains(err.Error(), secret) {
 				t.Errorf("error leaks credential: %v", err)
 			}
+			if strings.HasSuffix(tc.name, "invalid url") && !strings.Contains(err.Error(), "invalid URL") {
+				t.Errorf("parse failure not labelled as invalid URL: %v", err)
+			}
 		})
 	}
 }

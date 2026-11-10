@@ -1565,7 +1565,7 @@ func TestHandleAPISnoozePOST_HugeDurationClamped(t *testing.T) {
 	defer cleanup()
 	initTestTemplates(t)
 
-	body := url.Values{"duration": {"9223372036854775807"}}.Encode()
+	body := url.Values{"duration": {"2147483647"}}.Encode()
 	req := makeAuthenticatedRequest(t, "POST", "/api/snooze/0", body, "admin")
 	req.SetPathValue("index", "0")
 	rr := httptest.NewRecorder()

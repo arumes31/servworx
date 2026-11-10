@@ -24,6 +24,9 @@ import (
 func redactRequestError(provider string, err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
+		if urlErr.Op == "parse" {
+			return fmt.Errorf("%s request failed: invalid URL", provider)
+		}
 		if urlErr.Timeout() {
 			return fmt.Errorf("%s request failed: %s: timeout", provider, urlErr.Op)
 		}
