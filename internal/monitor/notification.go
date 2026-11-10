@@ -17,6 +17,21 @@ import (
 	"github.com/arumes31/servworx/internal/config"
 )
 
+// redactRequestError strips the request URL from HTTP client errors. Several
+// providers carry their credential in the URL (Discord/Teams/webhook URLs,
+// the Gotify token query parameter, the Telegram bot path), and *url.Error
+// embeds the full URL in its message, which callers log and return to the UI.
+func redactRequestError(provider string, err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return fmt.Errorf("%s request failed: %s: timeout", provider, urlErr.Op)
+		}
+		return fmt.Errorf("%s request failed: %s: connection error", provider, urlErr.Op)
+	}
+	return fmt.Errorf("%s request failed: %w", provider, err)
+}
+
 // isQuietHours checks if the current time falls inside the configured start and end hour range.
 func isQuietHours(now time.Time, start, end string) bool {
 	if start == "" || end == "" {
@@ -135,14 +150,14 @@ func sendWebhook(svc config.ServiceConfig, status string, detail string) error {
 	// #nosec G107 G704
 	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return redactRequestError("webhook", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		return err
+		return redactRequestError("webhook", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -183,14 +198,14 @@ func sendTeams(svc config.ServiceConfig, status string, detail string) error {
 	// #nosec G107 G704
 	req, err := http.NewRequest("POST", teamsURL, bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return redactRequestError("ms teams webhook", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		return err
+		return redactRequestError("ms teams webhook", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -241,12 +256,7 @@ func sendTelegram(svc config.ServiceConfig, status string, detail string) error 
 	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		// Sanitize error to prevent leaking the bot token from *url.Error
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
-			return fmt.Errorf("telegram api request failed: connection error")
-		}
-		return fmt.Errorf("telegram api request failed: %v", err)
+		return redactRequestError("telegram api", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -343,14 +353,14 @@ func sendDiscord(svc config.ServiceConfig, status string, detail string) error {
 	// #nosec G107 G704
 	req, err := http.NewRequest("POST", discordURL, bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return redactRequestError("discord", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		return err
+		return redactRequestError("discord", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -392,14 +402,14 @@ func sendGotify(svc config.ServiceConfig, status string, detail string) error {
 	// #nosec G107 G704
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return redactRequestError("gotify", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	// #nosec G704
 	resp, err := defaultHttpClient.Do(req)
 	if err != nil {
-		return err
+		return redactRequestError("gotify", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -434,7 +444,7 @@ func sendPushover(svc config.ServiceConfig, status string, detail string) error 
 	// #nosec G704
 	resp, err := defaultHttpClient.PostForm("https://api.pushover.net/1/messages.json", form)
 	if err != nil {
-		return err
+		return redactRequestError("pushover", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

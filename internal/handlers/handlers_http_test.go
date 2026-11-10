@@ -1544,3 +1544,39 @@ func TestFormatDurationZero(t *testing.T) {
 
 // Ensure a large fmt.Sprintf placeholder is not used in test
 var _ = fmt.Sprintf
+
+func TestHandleAPISnoozePOST_NegativeDurationRejected(t *testing.T) {
+	cleanup := setupTestConfig(t)
+	defer cleanup()
+	initTestTemplates(t)
+
+	body := url.Values{"duration": {"-5"}}.Encode()
+	req := makeAuthenticatedRequest(t, "POST", "/api/snooze/0", body, "admin")
+	req.SetPathValue("index", "0")
+	rr := httptest.NewRecorder()
+	HandleAPISnoozePOST(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for negative duration, got %d", rr.Code)
+	}
+}
+
+func TestHandleAPISnoozePOST_HugeDurationClamped(t *testing.T) {
+	cleanup := setupTestConfig(t)
+	defer cleanup()
+	initTestTemplates(t)
+
+	body := url.Values{"duration": {"9223372036854775807"}}.Encode()
+	req := makeAuthenticatedRequest(t, "POST", "/api/snooze/0", body, "admin")
+	req.SetPathValue("index", "0")
+	rr := httptest.NewRecorder()
+	HandleAPISnoozePOST(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	cfg, _ := config.LoadConfig()
+	now := time.Now().Unix()
+	got := cfg.Services[0].AlertSnoozeUntil
+	if got <= now || got > now+int64(maxSnoozeMinutes)*60+5 {
+		t.Errorf("snooze not clamped to one year: until=%d now=%d", got, now)
+	}
+}
