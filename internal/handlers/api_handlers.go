@@ -199,12 +199,14 @@ func HandleAPINotificationTestPOST(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		// #nosec G705
-		_, _ = fmt.Fprintf(w, `{"success": false, "error": %q}`, err.Error())
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "error": err.Error()})
 	} else {
 		_, _ = fmt.Fprintf(w, `{"success": true, "message": "Test alert dispatched successfully!"}`)
 	}
 }
+
+// maxSnoozeMinutes caps an alert snooze at one year.
+const maxSnoozeMinutes = 365 * 24 * 60
 
 func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
@@ -225,9 +227,18 @@ func HandleAPISnoozePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if durationMins < 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprintf(w, `{"success": false, "error": "Invalid duration"}`)
+		return
+	}
+	// Clamp before multiplying so huge inputs cannot overflow.
+	durationMins = min(durationMins, maxSnoozeMinutes)
+
 	var snoozeUntil int64
 	if durationMins > 0 {
-		snoozeUntil = time.Now().Unix() + int64(durationMins*60)
+		snoozeUntil = time.Now().Unix() + int64(durationMins)*60
 	} else {
 		snoozeUntil = 0
 	}
